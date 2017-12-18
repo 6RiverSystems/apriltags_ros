@@ -77,7 +77,7 @@ class AprilTagDetector{
   boost::shared_ptr<AprilTags::TagDetector> tag_detector_;
   bool projected_optics_;
   bool enabled_;
-  bool registered_cloud_;
+  bool same_frame_id_;
   int decimate_count_;
   int decimate_rate_;
   float plane_model_distance_threshold_;

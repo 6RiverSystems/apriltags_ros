@@ -30,7 +30,7 @@ namespace apriltags_ros{
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   it_(nh),
   enabled_(true),
-  registered_cloud_(false),
+  same_frame_id_(true),
   decimate_rate_(3),
   decimate_count_(0),
   plane_model_distance_threshold_(0.01),
@@ -164,11 +164,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     // Check for bad inputs
     if (cloud->header.frame_id != rgb_msg_in->header.frame_id)
     {
-      ROS_INFO_THROTTLE(5, "Depth image frame id [%s] doesn't match RGB image frame id [%s]",
+      ROS_DEBUG_THROTTLE(5, "Pointcloud frame id [%s] doesn't match RGB image frame id [%s]",
         cloud->header.frame_id.c_str(), rgb_msg_in->header.frame_id.c_str());
-      registered_cloud_ = false;
-    } else {
-      registered_cloud_ = true;
+      same_frame_id_ = false;
     }
 
     cv_bridge::CvImagePtr cv_ptr;
@@ -458,10 +456,10 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   pcl::PointIndices::Ptr polygonInlierIndices(new pcl::PointIndices());
 
-  if(!registered_cloud_)
+  if(!same_frame_id_)
   {
-    ROS_INFO_THROTTLE(5.0, "Conduct rgb to depth image registration");
-    for(size_t i = 0; i< 4; i++)
+    ROS_DEBUG_THROTTLE(5.0, "Register polygon points from rgb to depth frame");
+    for(size_t i = 0; i < 4; i++)
     {
       polygon[i].first = (polygon[i].first - rgb_info->K[2]) / rgb_info->K[0] * depth_info->K[0] + depth_info->K[2];
       polygon[i].second = (polygon[i].second - rgb_info->K[5]) / rgb_info->K[4] * depth_info->K[4] + depth_info->K[5];
