@@ -74,29 +74,29 @@ bool TagDetection::overlapsTooMuch(const TagDetection &other) const {
 }
 
 Eigen::Matrix4d TagDetection::getRelativeTransform(double tag_size, double fx, double fy, double px, double py) const {
-  std::vector<cv::Point3f> objPts;
-  std::vector<cv::Point2f> imgPts;
+  std::vector<cv::Point3d> objPts;
+  std::vector<cv::Point2d> imgPts;
   double s = tag_size/2.;
-  objPts.push_back(cv::Point3f(-s,-s, 0));
-  objPts.push_back(cv::Point3f( s,-s, 0));
-  objPts.push_back(cv::Point3f( s, s, 0));
-  objPts.push_back(cv::Point3f(-s, s, 0));
+  objPts.push_back(cv::Point3d(-s,-s, 0));
+  objPts.push_back(cv::Point3d( s,-s, 0));
+  objPts.push_back(cv::Point3d( s, s, 0));
+  objPts.push_back(cv::Point3d(-s, s, 0));
 
-  std::pair<float, float> p1 = p[0];
-  std::pair<float, float> p2 = p[1];
-  std::pair<float, float> p3 = p[2];
-  std::pair<float, float> p4 = p[3];
-  imgPts.push_back(cv::Point2f(p1.first, p1.second));
-  imgPts.push_back(cv::Point2f(p2.first, p2.second));
-  imgPts.push_back(cv::Point2f(p3.first, p3.second));
-  imgPts.push_back(cv::Point2f(p4.first, p4.second));
+  std::pair<double, double> p1 = p[0];
+  std::pair<double, double> p2 = p[1];
+  std::pair<double, double> p3 = p[2];
+  std::pair<double, double> p4 = p[3];
+  imgPts.push_back(cv::Point2d(p1.first, p1.second));
+  imgPts.push_back(cv::Point2d(p2.first, p2.second));
+  imgPts.push_back(cv::Point2d(p3.first, p3.second));
+  imgPts.push_back(cv::Point2d(p4.first, p4.second));
 
   cv::Mat rvec, tvec;
-  cv::Matx33f cameraMatrix(
+  cv::Matx33d cameraMatrix(
                            fx, 0, px,
                            0, fy, py,
                            0,  0,  1);
-  cv::Vec4f distParam(0,0,0,0); // all 0?
+  cv::Vec4d distParam(0,0,0,0); // all 0?
   cv::solvePnP(objPts, imgPts, cameraMatrix, distParam, rvec, tvec);
   cv::Matx33d r;
   cv::Rodrigues(rvec, r);
