@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   message_generation
   pcl_conversions
+  pcl_ros
   nodelet
   eigen_conversions
   std_msgs

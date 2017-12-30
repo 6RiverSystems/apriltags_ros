@@ -83,6 +83,7 @@ class AprilTagDetector{
   bool publish_plane_cloud_;
 
   tf::TransformListener tf_listener_;
+  tf::Transform tfRgbToCloud_;
   std::string output_frame_id_;
 };
 
