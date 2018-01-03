@@ -30,7 +30,6 @@ namespace apriltags_ros{
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   it_(nh),
   enabled_(true),
-  same_frame_id_(true),
   decimate_rate_(3),
   decimate_count_(0),
   plane_model_distance_threshold_(0.01),
@@ -114,12 +113,11 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   rgb_it_.reset( new image_transport::ImageTransport(nh) );
 
-  sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_point_cloud_, sub_rgb_, sub_rgb_info_, sub_depth_info_) );
-  sync_->registerCallback(boost::bind(&AprilTagDetector::imageCb, this, _1, _2, _3, _4));
+  sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_point_cloud_, sub_rgb_, sub_info_) );
+  sync_->registerCallback(boost::bind(&AprilTagDetector::imageCb, this, _1, _2, _3));
 
   sub_rgb_.subscribe(*rgb_it_, "image_rect", 5);
-  sub_rgb_info_.subscribe(nh, "rgb_camera_info", 5);
-  sub_depth_info_.subscribe(nh, "depth_camera_info", 5);
+  sub_info_.subscribe(nh, "camera_info", 5);
 
   sub_point_cloud_.subscribe(nh, "cloud_rect", 5);
 
@@ -148,8 +146,7 @@ double absoluteAngleDiff(double angleA, double angleB)
 
 void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
   const sensor_msgs::ImageConstPtr& rgb_msg_in,
-  const sensor_msgs::CameraInfoConstPtr& rgb_cam_info,
-  const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
+  const sensor_msgs::CameraInfoConstPtr& cam_info) {
   // Check for trigger / timing
   if (!enabled_) {
     ROS_DEBUG_THROTTLE(5.0, "April images received but not enabled.");
@@ -164,9 +161,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     // Check for bad inputs
     if (cloud->header.frame_id != rgb_msg_in->header.frame_id)
     {
-      ROS_DEBUG_THROTTLE(5, "Pointcloud frame id [%s] doesn't match RGB image frame id [%s]",
+      ROS_ERROR_THROTTLE(5, "Depth image frame id [%s] doesn't match RGB image frame id [%s]",
         cloud->header.frame_id.c_str(), rgb_msg_in->header.frame_id.c_str());
-      same_frame_id_ = false;
+      return;
     }
 
     cv_bridge::CvImagePtr cv_ptr;
@@ -189,17 +186,17 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     if (projected_optics_) {
       // use projected focal length and principal point
       // these are the correct values
-      fx = rgb_cam_info->P[0];
-      fy = rgb_cam_info->P[5];
-      px = rgb_cam_info->P[2];
-      py = rgb_cam_info->P[6];
+      fx = cam_info->P[0];
+      fy = cam_info->P[5];
+      px = cam_info->P[2];
+      py = cam_info->P[6];
     } else {
       // use camera intrinsic focal length and principal point
       // for backwards compatability
-      fx = rgb_cam_info->K[0];
-      fy = rgb_cam_info->K[4];
-      px = rgb_cam_info->K[2];
-      py = rgb_cam_info->K[5];
+      fx = cam_info->K[0];
+      fy = cam_info->K[4];
+      px = cam_info->K[2];
+      py = cam_info->K[5];
     }
 
     if(!sensor_frame_id_.empty()) {
@@ -261,7 +258,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       // Align the x axis to the detected plane for the purposes of alignment and visualization
       tf::Vector3 xAxis(rot(0,0), rot(1,0), rot(2,0));
 
-      tf::Transform planeTransform = getDepthImagePlaneTransform(cloud, rgb_cam_info, depth_cam_info, detection.p, detection, xAxis);
+      tf::Transform planeTransform = getDepthImagePlaneTransform(cloud, detection.p, detection, xAxis);
 
       tf::Matrix3x3 aprilTagRotation;
       tf::matrixEigenToTF(rot, aprilTagRotation);
@@ -443,7 +440,6 @@ tf::Transform getPlaneTransform(pcl::ModelCoefficients coeffs, tf::Vector3 xAxis
 }
 
 tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-  const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info,
   std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxisVector)
 {
   tf::Transform transform = tf::Transform::getIdentity();
@@ -455,16 +451,6 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr planeInliers(new pcl::PointCloud<pcl::PointXYZRGB>);
 
   pcl::PointIndices::Ptr polygonInlierIndices(new pcl::PointIndices());
-
-  if(!same_frame_id_)
-  {
-    ROS_DEBUG_THROTTLE(5.0, "Register polygon points from rgb to depth frame");
-    for(size_t i = 0; i < 4; i++)
-    {
-      polygon[i].first = (polygon[i].first - rgb_info->K[2]) / rgb_info->K[0] * depth_info->K[0] + depth_info->K[2];
-      polygon[i].second = (polygon[i].second - rgb_info->K[5]) / rgb_info->K[4] * depth_info->K[4] + depth_info->K[5];
-    }
-  }
 
   pcl::PointCloud<pcl::PointXYZ> clipPolygon;
   clipPolygon.push_back(pcl::PointXYZ(polygon[0].first, polygon[0].second, 0));
