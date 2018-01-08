@@ -24,7 +24,11 @@
 #include <eigen_conversions/eigen_msg.h>
 #include <tf_conversions/tf_eigen.h>
 #include <cmath>
-
+#include <Eigen/Core>
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 namespace apriltags_ros{
 
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
@@ -132,7 +136,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 }
 
 AprilTagDetector::~AprilTagDetector(){
-
+    ROS_WARN("HERE %d %s shutting down", __LINE__, __FILE__);
 }
 
 void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
@@ -150,14 +154,21 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
   const sensor_msgs::ImageConstPtr& rgb_msg_in,
   const sensor_msgs::CameraInfoConstPtr& rgb_cam_info,
   const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
+
+  pid_t tid = syscall(SYS_gettid);
+
   // Check for trigger / timing
   if (!enabled_) {
     ROS_DEBUG_THROTTLE(5.0, "April images received but not enabled.");
+    ROS_WARN("HERE %d %d %s April images received but not enabled.", (int) tid, __LINE__, __FILE__);
 
     return;
   }
 
   ROS_DEBUG_THROTTLE(5.0, "April images received.");
+
+  ROS_WARN("HERE %d %d %s April images received.", (int) tid, __LINE__, __FILE__);
+
 
   if ((decimate_count_++ % decimate_rate_) == 0)
   {
@@ -181,6 +192,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     cv::cvtColor(cv_ptr->image, gray, CV_BGR2GRAY);
     std::vector<AprilTags::TagDetection> detections = tag_detector_->extractTags(gray);
     ROS_DEBUG("%d tag detected", (int)detections.size());
+    ROS_WARN("HERE %d %d %s %d tag detected", (int) tid, __LINE__, __FILE__, (int)detections.size());
 
     double fx;
     double fy;
@@ -206,6 +218,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       cv_ptr->header.frame_id = sensor_frame_id_;
     }
 
+    ROS_WARN("HERE %d %d %s", (int) tid, __LINE__, __FILE__);
+
+
     std_msgs::Header header = cv_ptr->header;
     bool transform_output = false;
     tf::Transform output_transform;
@@ -214,28 +229,38 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         transform_output = true;
         header.frame_id = output_frame_id_;
       } else {
-        ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", output_frame_id_.c_str());
+          ROS_WARN("HERE %d %d %s Could not get transform to specified frame %s.", (int) tid, __LINE__, __FILE__, output_frame_id_.c_str());
+
+          ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", output_frame_id_.c_str());
         return;
       }
     }
+    ROS_WARN("HERE %d %d %s", (int) tid, __LINE__, __FILE__);
 
     AprilTagDetectionArray tag_detection_array;
     geometry_msgs::PoseArray tag_pose_array;
     tag_pose_array.header = header;
     geometry_msgs::PoseArray plane_pose_array;
     plane_pose_array.header = header;
+    ROS_WARN("HERE %d %s", __LINE__, __FILE__);
+    ROS_WARN("HERE %d %d %s Detections.size = %d", (int) tid, __LINE__, __FILE__, detections.size());
 
     BOOST_FOREACH(AprilTags::TagDetection detection, detections) {
       std::map<int, AprilTagDescription>::const_iterator description_itr = descriptions_.find(detection.id);
+            ROS_WARN("HERE %d %d %s", (int) tid, __LINE__, __FILE__);
 
       if(description_itr == descriptions_.end()){
         ROS_INFO_THROTTLE(10.0, "Found tag: %d, but no description was found for it", detection.id);
-        continue;
+        ROS_WARN("HERE %d %d %s Found tag: %d, but no description was found for it", (int) tid, __LINE__, __FILE__, detection.id);
+
+          continue;
       }
 
       AprilTagDescription description = description_itr->second;
       double tag_size = description.size();
-
+      ROS_WARN("HERE %d %d %s April Tag detected in rect: %f, %f - %f, %f - %f, %f - %f, %f", (int) tid, __LINE__, __FILE__, detection.p[0].first, detection.p[0].second,
+               detection.p[1].first, detection.p[1].second, detection.p[2].first, detection.p[2].second,
+               detection.p[3].first, detection.p[3].second);
       ROS_DEBUG_THROTTLE(5.0, "April Tag detected in rect: %f, %f - %f, %f - %f, %f - %f, %f", detection.p[0].first, detection.p[0].second,
         detection.p[1].first, detection.p[1].second, detection.p[2].first, detection.p[2].second,
         detection.p[3].first, detection.p[3].second);
@@ -280,6 +305,11 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       // The maximum allowed angle delta for each axis
       if ((diffRoll > plane_angle_threshold_) || (diffPitch > plane_angle_threshold_))
       {
+        ROS_WARN("HERE %d %d %s April tag and plane poses do not match!", (int) tid, __LINE__, __FILE__);
+
+        ROS_WARN("HERE %d %d %s April angle: %f, %f", (int) tid, __LINE__, __FILE__, aprilTagRoll, aprilTagPitch);
+        ROS_WARN("HERE %d %d %s Plane angle: %f, %f", (int) tid, __LINE__, __FILE__, planeRoll, planePitch);
+        ROS_WARN("HERE %d %d %s Diff: %f, %f", (int) tid, __LINE__, __FILE__, diffRoll, diffPitch);
         ROS_DEBUG_THROTTLE(5.0, "April tag and plane poses do not match!");
 
         ROS_DEBUG_THROTTLE(5.0, "April angle: %f, %f", aprilTagRoll, aprilTagPitch);
@@ -337,6 +367,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
       if (validPose)
       {
+          ROS_WARN("HERE %d %d %s Pose was valid", (int) tid, __LINE__, __FILE__);
         AprilTagDetection tag_detection;
         tag_detection.pose = tag_pose;
         tag_detection.id = detection.id;
@@ -349,14 +380,20 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       }
 
       // Publish both poses either way to debug/visualise
+      ROS_WARN("HERE %d %d %s Pose was published for debugging", (int) tid, __LINE__, __FILE__);
+
       tag_pose_array.poses.push_back(tag_pose.pose);
       plane_pose_array.poses.push_back(planePose);
    }
+    ROS_WARN("HERE %d %d %s about to publish output", (int) tid, __LINE__, __FILE__);
+
     detections_pub_.publish(tag_detection_array);
     pose_pub_.publish(tag_pose_array);
     plane_pose_pub_.publish(plane_pose_array);
     image_pub_.publish(cv_ptr->toImageMsg());
   }
+  ROS_WARN("HERE %d %d %s tag detection complete", (int) tid, __LINE__, __FILE__);
+
 }
 
 std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlRpc::XmlRpcValue& tag_descriptions){
@@ -456,15 +493,17 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   pcl::PointIndices::Ptr polygonInlierIndices(new pcl::PointIndices());
 
-  if(!same_frame_id_)
-  {
-    ROS_DEBUG_THROTTLE(5.0, "Register polygon points from rgb to depth frame");
-    for(size_t i = 0; i < 4; i++)
-    {
-      polygon[i].first = (polygon[i].first - rgb_info->K[2]) / rgb_info->K[0] * depth_info->K[0] + depth_info->K[2];
-      polygon[i].second = (polygon[i].second - rgb_info->K[5]) / rgb_info->K[4] * depth_info->K[4] + depth_info->K[5];
-    }
-  }
+
+  // cannot register points to depth frame... we don't have depth so we are projecting to an unknown location in depth
+  //if(!same_frame_id_)
+  //{
+  //  ROS_DEBUG_THROTTLE(5.0, "Register polygon points from rgb to depth frame");
+  //  for(size_t i = 0; i < 4; i++)
+  //  {
+  //    polygon[i].first = (polygon[i].first - rgb_info->K[2]) / rgb_info->K[0] * depth_info->K[0] + depth_info->K[2];
+  //    polygon[i].second = (polygon[i].second - rgb_info->K[5]) / rgb_info->K[4] * depth_info->K[4] + depth_info->K[5];
+  //  }
+  //}
 
   pcl::PointCloud<pcl::PointXYZ> clipPolygon;
   clipPolygon.push_back(pcl::PointXYZ(polygon[0].first, polygon[0].second, 0));
@@ -473,22 +512,52 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   clipPolygon.push_back(pcl::PointXYZ(polygon[3].first, polygon[3].second, 0));
   clipPolygon.push_back(pcl::PointXYZ(polygon[0].first, polygon[0].second, 0));
 
+  // generate the transform from depth_camera_reference frame to rgb_camera_reference frame
+  tf::Transform depth_to_rgb_transform;
+  string rgb_camera_frame_name = rgb_info->header.frame_id;
+  string depth_camera_frame_name = depth_info->header.frame_id;
+
+  getTransform(depth_camera_frame_name, rgb_camera_frame_name, depth_to_rgb_transform);
+
+  // generate a projection from rgb_camera_reference frame to image frame that is the P matrix in the rgb_info object
+
+  // actually convert the whole point cloud from depth frame to rgb frame
+
+  std::for_each(pointCloud->begin(), pointCloud->end(), [&depth_to_rgb_transform](pcl::PointXYZRGB & point) -> void {
+    tf::Vector3 pcl_point(point.x, point.y, point.z); pcl_point = depth_to_rgb_transform * pcl_point; point.x = pcl_point.x(); point.y = pcl_point.y(); point.z = pcl_point.z(); });
+
+  //depth_to_rgb_transform
+    //
+    Eigen::Matrix3f projection_mat;
+    projection_mat << rgb_info->K[0], rgb_info->K[1], rgb_info->K[2], rgb_info->K[3], rgb_info->K[4], rgb_info->K[5], rgb_info->K[6], rgb_info->K[7], rgb_info->K[8];
+
+  ROS_DEBUG_THROTTLE(5.0, "about to analyze the cloud");
+  ROS_WARN("HERE %d %s about to analyze the cloud", __LINE__, __FILE__);
+
   for (int x = 0; x < pointCloud->width; x++)
   {
     for (int y = 0; y < pointCloud->height; y++)
     {
         int i = x + (pointCloud->width * y);
 
-        pcl::PointXYZ point(x, y, 0 );
+        Eigen::Vector3f point{pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z};
 
-        if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, clipPolygon))
+        point = projection_mat * point;
+
+        //if (point[2]!=0) {
+        //  point = point / point[2];
+        //}
+        pcl::PointXYZ pcl_point{point[0], point[1], 0};
+        if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(pcl_point, clipPolygon))
         {
           polygonInlierIndices->indices.push_back(i);
+          ROS_WARN("HERE %d %s point %d with xyz coordinates %f %f %f with image projection %f %f %f is an inliner", __LINE__, __FILE__, i, pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z, point[0], point[1], point[2]);
         }
     }
   }
 
   ROS_DEBUG_THROTTLE(5.0, "Points in detection polygon: %zu", polygonInlierIndices->indices.size());
+  ROS_WARN("HERE %d %s Points in detection polygon: %zu", __LINE__, __FILE__, polygonInlierIndices->indices.size());
 
   pcl::ExtractIndices<pcl::PointXYZRGB> extract;
   extract.setInputCloud(pointCloud);
@@ -516,12 +585,14 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   if (planeInlierIndices->indices.size () == 0)
   {
     ROS_DEBUG("Could not estimate a planar model for the given dataset.");
+    ROS_WARN("HERE %d %s Could not estimate a planar model for the given dataset.", __LINE__, __FILE__);
   }
   else
   {
     size_t numIndices = planeInlierIndices->indices.size();
 
     ROS_DEBUG_THROTTLE(5.0, "Points in plane: %zu out of %zu", numIndices, polygonInliers->size());
+    ROS_WARN("HERE %d %s Points in plane: %zu out of %zu", __LINE__, __FILE__, numIndices, polygonInliers->size());
 
     if (publish_plane_cloud_)
     {
