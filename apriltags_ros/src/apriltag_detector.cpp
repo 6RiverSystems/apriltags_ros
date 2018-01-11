@@ -475,17 +475,17 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   if (projected_optics_) {
     // use projected focal length and principal point
     // these are the correct values
-    fx = rgb_cam_info->P[0];
-    fy = rgb_cam_info->P[5];
-    px = rgb_cam_info->P[2];
-    py = rgb_cam_info->P[6];
+    fx = rgb_cam_info.P[0];
+    fy = rgb_cam_info.P[5];
+    px = rgb_cam_info.P[2];
+    py = rgb_cam_info.P[6];
   } else {
     // use camera intrinsic focal length and principal point
     // for backwards compatability
-    fx = rgb_cam_info->K[0];
-    fy = rgb_cam_info->K[4];
-    px = rgb_cam_info->K[2];
-    py = rgb_cam_info->K[5];
+    fx = rgb_cam_info.K[0];
+    fy = rgb_cam_info.K[4];
+    px = rgb_cam_info.K[2];
+    py = rgb_cam_info.K[5];
   }
 
   for( size_t i = 0; i < pointCloudRgbImage->points.size(); i++)
