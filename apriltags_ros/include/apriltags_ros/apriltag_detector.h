@@ -15,6 +15,7 @@
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <image_geometry/pinhole_camera_model.h>
 
 namespace apriltags_ros{
 
@@ -81,6 +82,7 @@ class AprilTagDetector{
   float plane_inlier_threshold_;
   float plane_angle_threshold_;
   bool publish_plane_cloud_;
+  image_geometry::PinholeCameraModel rgb_model_;
 
   tf::TransformListener tf_listener_;
   tf::Transform tfDepthToRgb_;
