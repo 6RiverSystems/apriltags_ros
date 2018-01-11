@@ -528,7 +528,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
     ROS_DEBUG_THROTTLE(5.0, "Points in plane: %zu out of %zu", numIndices, polygonInliers->size());
 
-    if (publish_plane_cloud_.getNumSubscribers() > 0)
+    if (plane_cloud_pub_.getNumSubscribers() > 0)
     {
       // Extract the inliers
       pcl::ExtractIndices<pcl::PointXYZ> extract;
