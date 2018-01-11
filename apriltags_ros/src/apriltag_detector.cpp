@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <pcl_ros/transforms.h>
 namespace apriltags_ros{
 
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
@@ -152,8 +153,7 @@ double absoluteAngleDiff(double angleA, double angleB)
 
 void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
   const sensor_msgs::ImageConstPtr& rgb_msg_in,
-  const sensor_msgs::CameraInfoConstPtr& rgb_cam_info,
-  const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
+  const sensor_msgs::CameraInfoConstPtr& rgb_cam_info, const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
 
   pid_t tid = syscall(SYS_gettid);
 
@@ -169,6 +169,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
   ROS_WARN("HERE %d %d %s April images received.", (int) tid, __LINE__, __FILE__);
 
+  ROS_WARN("HERE %d %s rgb_msg_in frame_id = %s rgb_cam_info frame_id = %s", __LINE__, __FILE__,rgb_msg_in->header.frame_id.c_str(), rgb_cam_info->header.frame_id.c_str());
 
   if ((decimate_count_++ % decimate_rate_) == 0)
   {
@@ -425,20 +426,20 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
   return descriptions;
 }
 
-bool AprilTagDetector::getTransform(std::string t1, std::string t2, tf::Transform& output) {
+bool AprilTagDetector::getTransform(const std::string & target_frame, const std::string & source_frame, tf::Transform& output) {
   try {
     tf::StampedTransform robotTransform;
 
-    if (tf_listener_.canTransform(t1, t2,
+    if (tf_listener_.canTransform(target_frame, source_frame,
         ros::Time(0))) {
       tf::StampedTransform robotTransform;
-      tf_listener_.lookupTransform(t1, t2,
+      tf_listener_.lookupTransform(target_frame, source_frame,
           ros::Time(0), robotTransform);
 
       output = robotTransform;
       return true;
     } else {
-      ROS_ERROR_STREAM_THROTTLE_NAMED(1.0, "apriltag_transform", "Could not lookup transform from" << t1 << " to " << t2 << ".");
+      ROS_ERROR_STREAM_THROTTLE_NAMED(1.0, "apriltag_transform", "Could not lookup transform from" << target_frame << " to " << source_frame << ".");
       return false;
     }
   } catch(const tf::TransformException& e) {
@@ -480,8 +481,9 @@ tf::Transform getPlaneTransform(pcl::ModelCoefficients coeffs, tf::Vector3 xAxis
 }
 
 tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-  const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info,
-  std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxisVector)
+  const sensor_msgs::CameraInfoConstPtr& rgb_info,   const sensor_msgs::CameraInfoConstPtr& depth_info,
+
+                                                            std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxisVector)
 {
   tf::Transform transform = tf::Transform::getIdentity();
 
@@ -515,52 +517,161 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   // generate the transform from depth_camera_reference frame to rgb_camera_reference frame
   tf::Transform depth_to_rgb_transform;
   string rgb_camera_frame_name = rgb_info->header.frame_id;
-  string depth_camera_frame_name = depth_info->header.frame_id;
+  string depth_camera_frame_name = cloud->header.frame_id;
 
-  getTransform(depth_camera_frame_name, rgb_camera_frame_name, depth_to_rgb_transform);
+  ROS_WARN("HERE %d %s name of the rgb_camera frame %s name of the depth camera frame %s", __LINE__, __FILE__, rgb_camera_frame_name.c_str(), depth_camera_frame_name.c_str());
+
+  getTransform(rgb_camera_frame_name, depth_camera_frame_name, depth_to_rgb_transform);
 
   // generate a projection from rgb_camera_reference frame to image frame that is the P matrix in the rgb_info object
 
   // actually convert the whole point cloud from depth frame to rgb frame
 
-  std::for_each(pointCloud->begin(), pointCloud->end(), [&depth_to_rgb_transform](pcl::PointXYZRGB & point) -> void {
-    tf::Vector3 pcl_point(point.x, point.y, point.z); pcl_point = depth_to_rgb_transform * pcl_point; point.x = pcl_point.x(); point.y = pcl_point.y(); point.z = pcl_point.z(); });
+  pcl::PointCloud<pcl::PointXYZRGB> point_cloud_in_rgb_frame;
 
+  //long double Bx = depth_info->P[3]/(-1 * depth_info->P[0]);
+  //ROS_WARN("HERE %d %s Bx = %f", __LINE__, __FILE__, Bx);
+  //long double By = 0;//depth_info->P[7]/-depth_info->P[1];
+
+  //depth_to_rgb_transform.setIdentity();
+  //depth_to_rgb_transform.setOrigin(tf::Vector3{Bx,By,0});
+  pcl_ros::transformPointCloud(*pointCloud, point_cloud_in_rgb_frame, depth_to_rgb_transform);
+  //std::for_each(pointCloud->begin(), pointCloud->end(), [&depth_to_rgb_transform](pcl::PointXYZRGB & point) -> void {
+    //tf::Vector3 pcl_point(point.x, point.y, point.z); pcl_point = depth_to_rgb_transform * pcl_point; point.x = pcl_point.x(); point.y = pcl_point.y(); point.z = pcl_point.z(); });
+
+
+  //std::for_each(pointCloud->begin(), pointCloud->end(), [Bx,By, &point_cloud_in_rgb_frame](pcl::PointXYZRGB & point) -> void {
+  //      pcl::PointXYZRGB pcl_point(point.x+Bx, point.y+By, point.z);
+  //      point_cloud_in_rgb_frame.push_back(pcl_point);
+  //});
+  point_cloud_in_rgb_frame.header.frame_id = rgb_camera_frame_name;
   //depth_to_rgb_transform
     //
     Eigen::Matrix3f projection_mat;
-    projection_mat << rgb_info->K[0], rgb_info->K[1], rgb_info->K[2], rgb_info->K[3], rgb_info->K[4], rgb_info->K[5], rgb_info->K[6], rgb_info->K[7], rgb_info->K[8];
+    projection_mat << rgb_info->P[0], rgb_info->P[1], rgb_info->P[2], rgb_info->P[4], rgb_info->P[5], rgb_info->P[6], rgb_info->P[8], rgb_info->P[9], rgb_info->P[10];
+
+    for (int i = 0; i != 12; ++i) {
+        ROS_WARN("HERE %d %s p[%d] = %f", __LINE__, __FILE__, i, rgb_info->P[i]);
+    }
 
   ROS_DEBUG_THROTTLE(5.0, "about to analyze the cloud");
   ROS_WARN("HERE %d %s about to analyze the cloud", __LINE__, __FILE__);
 
-  for (int x = 0; x < pointCloud->width; x++)
+
+    float minX = 10000;
+    float minY = 10000;
+    float maxX = -10000;
+    float maxY = -10000;
+
+  float minXrgb = 10000;
+  float minYrgb = 10000;
+  float maxXrgb = -10000;
+  float maxYrgb = -10000;
+
+  double fx;
+  double fy;
+  double cx;
+  double tx = 0;
+  double cy;
+  double ty = 0;
+  if (true) {
+    // use projected focal length and principal point
+    // these are the correct values
+    fx = rgb_info->P[0];
+    fy = rgb_info->P[5];
+    cx = rgb_info->P[2];
+    cy = rgb_info->P[6];
+    tx = rgb_info->P[3];
+    ty = rgb_info->P[7];
+
+  } else {
+    // use camera intrinsic focal length and principal point
+    // for backwards compatability
+    fx = rgb_info->K[0];
+    fy = rgb_info->K[4];
+    cx = rgb_info->K[2];
+    cy = rgb_info->K[5];
+  }
+
+
+  for (int x = 0; x < point_cloud_in_rgb_frame.width; x++)
   {
-    for (int y = 0; y < pointCloud->height; y++)
+    for (int y = 0; y < point_cloud_in_rgb_frame.height; y++)
     {
-        int i = x + (pointCloud->width * y);
+        int i = x + (point_cloud_in_rgb_frame.width * y);
 
-        Eigen::Vector3f point{pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z};
+        Eigen::Vector3f point{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
 
-        point = projection_mat * point;
+
+      double inv_Z = 1.0 /point[2];
+      int u_rgb = (fx*(point[0]-.04) + tx)*inv_Z + cx + 0.5; //-12
+      int v_rgb = (fy*(point[1]-.01) + ty)*inv_Z + cy + 0.5;  //-5
+      //int u_rgb = (fx*(point[0]) + tx)*inv_Z + cx + 0.5; //-12
+      //int v_rgb = (fy*(point[1]) + ty)*inv_Z + cy + 0.5;  //-5
+
+
+        //point = projection_mat * point;
 
         //if (point[2]!=0) {
         //  point = point / point[2];
         //}
-        pcl::PointXYZ pcl_point{point[0], point[1], 0};
+        pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0};
         if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(pcl_point, clipPolygon))
         {
           polygonInlierIndices->indices.push_back(i);
-          ROS_WARN("HERE %d %s point %d with xyz coordinates %f %f %f with image projection %f %f %f is an inliner", __LINE__, __FILE__, i, pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z, point[0], point[1], point[2]);
+            minX = minX < point[0] ? minX : point[0];
+            minY = minY < point[1] ? minY : point[1];
+            maxX = maxX > point[0] ? maxX : point[0];
+            maxY = maxY > point[1] ? maxY : point[1];
+
+          //ROS_WARN("HERE %d %s point %d with xyz coordinates %f %f %f with image projection %f %f %f is an inliner", __LINE__, __FILE__, i, pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z, point[0], point[1], point[2]);
         }
+
+      pcl::PointXYZ temp{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
+      if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(temp, clipPolygon))
+      {
+        minXrgb = minXrgb < temp.x ? minXrgb : temp.x;
+        minYrgb = minYrgb < temp.y ? minYrgb : temp.y;
+        maxXrgb = maxXrgb > temp.x ? maxXrgb : temp.x;
+        maxYrgb = maxYrgb > temp.y ? maxYrgb : temp.y;
+
+        //ROS_WARN("HERE %d %s point %d with xyz coordinates %f %f %f with image projection %f %f %f is an inliner", __LINE__, __FILE__, i, pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z, point[0], point[1], point[2]);
+      }
+
     }
   }
 
+  ROS_WARN("HERE %d %s rgb frame points range was minX %f minY %f maxX %f maxY %f", __LINE__, __FILE__, minXrgb, minYrgb, maxXrgb, maxYrgb);
+
+
+  ROS_WARN("HERE %d %s projected points range was minX %f minY %f maxX %f maxY %f", __LINE__, __FILE__, minX, minY, maxX, maxY);
   ROS_DEBUG_THROTTLE(5.0, "Points in detection polygon: %zu", polygonInlierIndices->indices.size());
   ROS_WARN("HERE %d %s Points in detection polygon: %zu", __LINE__, __FILE__, polygonInlierIndices->indices.size());
 
+
+  if (polygonInlierIndices->indices.size() > 0) {
+    int i = polygonInlierIndices->indices[0];
+    Eigen::Vector3f point{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
+
+
+    double inv_Z = 1.0 /point[2];
+    int u_rgb = (fx*(point[0]-.04) + tx)*inv_Z + cx + 0.5; //-12
+    int v_rgb = (fy*(point[1]-.01) + ty)*inv_Z + cy + 0.5;  //-5
+
+
+    //point = projection_mat * point;
+
+    //if (point[2]!=0) {
+    //  point = point / point[2];
+    //}
+    pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0};
+    ROS_WARN("HERE %d %s point %d with xyz coordinates %f %f %f with rgb coordinates %f %f %f has image projection %f %f %f is an inliner", __LINE__, __FILE__, i, pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z, point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z, pcl_point.x, pcl_point.y, pcl_point.z);
+
+
+  }
+
   pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-  extract.setInputCloud(pointCloud);
+  extract.setInputCloud(point_cloud_in_rgb_frame.makeShared());
   extract.setIndices(polygonInlierIndices);
   extract.setNegative(false);
   extract.filter(*polygonInliers);

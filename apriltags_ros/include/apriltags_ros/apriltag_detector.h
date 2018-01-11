@@ -42,10 +42,10 @@ class AprilTagDetector{
   void imageCb(const sensor_msgs::PointCloud2ConstPtr& depth_msg, const sensor_msgs::ImageConstPtr& rgb_msg_in,
 		const sensor_msgs::CameraInfoConstPtr& rgb_info_msg, const sensor_msgs::CameraInfoConstPtr& depth_info_msg);
   std::map<int, AprilTagDescription> parse_tag_descriptions(XmlRpc::XmlRpcValue& april_tag_descriptions);
-  bool getTransform(std::string t1, std::string t2, tf::Transform& output);
+  bool getTransform(const std::string & target_frame, const std::string & source_frame, tf::Transform& output);
 
   tf::Transform getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-    const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info,
+    const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info_msg,
     std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxis);
 
  private:
