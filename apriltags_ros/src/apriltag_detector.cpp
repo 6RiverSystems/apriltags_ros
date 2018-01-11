@@ -496,8 +496,8 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
     // Project to (u,v) in RGB image
     double inv_Z = 1.0 / z;
-    int u_rgb = (fx * x + rgb_Tx) * inv_Z + px + 0.5;
-    int v_rgb = (fy * y + rgb_Ty) * inv_Z + py + 0.5;
+    int u_rgb = (fx * x) * inv_Z + px + 0.5;
+    int v_rgb = (fy * y) * inv_Z + py + 0.5;
 
     pcl::PointXYZ point(u_rgb, v_rgb, 0 );
 
