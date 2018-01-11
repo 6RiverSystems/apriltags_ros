@@ -465,7 +465,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   // Convert from depth optical frame to rgb optical frame
   pcl::PointCloud<pcl::PointXYZ>::Ptr pointCloudRgbImage(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl_ros::transformPointCloud(*pointCloudRgbImage, *pointCloud, tfDepthToRgb_);
+  pcl_ros::transformPointCloud(*pointCloud, *pointCloudRgbImage, tfDepthToRgb_);
 
   double rgb_fx = rgb_model_.fx();
   double rgb_fy = rgb_model_.fy();
