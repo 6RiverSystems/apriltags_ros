@@ -155,11 +155,13 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
   if ((decimate_count_++ % decimate_rate_) == 0)
   {
+    rgbd_frame_id_ = rgb_msg_in->header.frame_id;
+
     // Check for bad inputs
-    if (cloud->header.frame_id != rgb_msg_in->header.frame_id)
+    if (cloud->header.frame_id != rgbd_frame_id_)
     {
-      if (!getTransform(rgb_msg_in->header.frame_id, cloud->header.frame_id, tfDepthToRgb_)) {
-        ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", output_frame_id_.c_str());
+      if (!getTransform(rgbd_frame_id_, cloud->header.frame_id, tfDepthToRgb_)) {
+        ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", rgbd_frame_id_);
         return;
       }
 
@@ -538,7 +540,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
       extract.filter(*planeInliers);
 
       sensor_msgs::PointCloud2 planeInliersRos;
-      planeInliersRos.header.frame_id = cloud->header.frame_id;
+      planeInliersRos.header.frame_id = rgbd_frame_id_;
       pcl::toROSMsg(*planeInliers, planeInliersRos);
       plane_cloud_pub_.publish(planeInliersRos);
     }

@@ -85,6 +85,8 @@ class AprilTagDetector{
 
   tf::TransformListener tf_listener_;
   tf::Transform tfDepthToRgb_;
+
+  std::string rgbd_frame_id_;
   std::string output_frame_id_;
 };
 
