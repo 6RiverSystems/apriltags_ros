@@ -161,7 +161,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     if (cloud->header.frame_id != rgbd_frame_id_)
     {
       if (!getTransform(rgbd_frame_id_, cloud->header.frame_id, tfDepthToRgb_)) {
-        ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", rgbd_frame_id_);
+        ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", rgbd_frame_id_.c_str());
         return;
       }
 
