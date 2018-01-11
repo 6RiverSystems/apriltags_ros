@@ -24,7 +24,8 @@
 #include <eigen_conversions/eigen_msg.h>
 #include <tf_conversions/tf_eigen.h>
 #include <cmath>
-
+#include <Eigen/Core>
+#include <pcl_ros/transforms.h>
 namespace apriltags_ros{
 
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
@@ -114,12 +115,11 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   rgb_it_.reset( new image_transport::ImageTransport(nh) );
 
-  sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_point_cloud_, sub_rgb_, sub_rgb_info_, sub_depth_info_) );
-  sync_->registerCallback(boost::bind(&AprilTagDetector::imageCb, this, _1, _2, _3, _4));
+  sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_point_cloud_, sub_rgb_, sub_rgb_info_) );
+  sync_->registerCallback(boost::bind(&AprilTagDetector::imageCb, this, _1, _2, _3));
 
   sub_rgb_.subscribe(*rgb_it_, "image_rect", 5);
   sub_rgb_info_.subscribe(nh, "rgb_camera_info", 5);
-  sub_depth_info_.subscribe(nh, "depth_camera_info", 5);
 
   sub_point_cloud_.subscribe(nh, "cloud_rect", 5);
 
@@ -132,7 +132,6 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 }
 
 AprilTagDetector::~AprilTagDetector(){
-
 }
 
 void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
@@ -148,12 +147,11 @@ double absoluteAngleDiff(double angleA, double angleB)
 
 void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
   const sensor_msgs::ImageConstPtr& rgb_msg_in,
-  const sensor_msgs::CameraInfoConstPtr& rgb_cam_info,
-  const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
+  const sensor_msgs::CameraInfoConstPtr& rgb_cam_info) {
+
   // Check for trigger / timing
   if (!enabled_) {
     ROS_DEBUG_THROTTLE(5.0, "April images received but not enabled.");
-
     return;
   }
 
@@ -214,7 +212,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         transform_output = true;
         header.frame_id = output_frame_id_;
       } else {
-        ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", output_frame_id_.c_str());
+          ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", output_frame_id_.c_str());
         return;
       }
     }
@@ -261,7 +259,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       // Align the x axis to the detected plane for the purposes of alignment and visualization
       tf::Vector3 xAxis(rot(0,0), rot(1,0), rot(2,0));
 
-      tf::Transform planeTransform = getDepthImagePlaneTransform(cloud, rgb_cam_info, depth_cam_info, detection.p, detection, xAxis);
+      tf::Transform planeTransform = getDepthImagePlaneTransform(cloud, rgb_cam_info, detection.p, detection, xAxis);
 
       tf::Matrix3x3 aprilTagRotation;
       tf::matrixEigenToTF(rot, aprilTagRotation);
@@ -388,20 +386,20 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
   return descriptions;
 }
 
-bool AprilTagDetector::getTransform(std::string t1, std::string t2, tf::Transform& output) {
+bool AprilTagDetector::getTransform(const std::string & target_frame, const std::string & source_frame, tf::Transform& output) {
   try {
     tf::StampedTransform robotTransform;
 
-    if (tf_listener_.canTransform(t1, t2,
+    if (tf_listener_.canTransform(target_frame, source_frame,
         ros::Time(0))) {
       tf::StampedTransform robotTransform;
-      tf_listener_.lookupTransform(t1, t2,
+      tf_listener_.lookupTransform(target_frame, source_frame,
           ros::Time(0), robotTransform);
 
       output = robotTransform;
       return true;
     } else {
-      ROS_ERROR_STREAM_THROTTLE_NAMED(1.0, "apriltag_transform", "Could not lookup transform from" << t1 << " to " << t2 << ".");
+      ROS_ERROR_STREAM_THROTTLE_NAMED(1.0, "apriltag_transform", "Could not lookup transform from" << target_frame << " to " << source_frame << ".");
       return false;
     }
   } catch(const tf::TransformException& e) {
@@ -443,8 +441,7 @@ tf::Transform getPlaneTransform(pcl::ModelCoefficients coeffs, tf::Vector3 xAxis
 }
 
 tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-  const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info,
-  std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxisVector)
+  const sensor_msgs::CameraInfoConstPtr& rgb_info, std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxisVector)
 {
   tf::Transform transform = tf::Transform::getIdentity();
 
@@ -456,16 +453,6 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   pcl::PointIndices::Ptr polygonInlierIndices(new pcl::PointIndices());
 
-  if(!same_frame_id_)
-  {
-    ROS_DEBUG_THROTTLE(5.0, "Register polygon points from rgb to depth frame");
-    for(size_t i = 0; i < 4; i++)
-    {
-      polygon[i].first = (polygon[i].first - rgb_info->K[2]) / rgb_info->K[0] * depth_info->K[0] + depth_info->K[2];
-      polygon[i].second = (polygon[i].second - rgb_info->K[5]) / rgb_info->K[4] * depth_info->K[4] + depth_info->K[5];
-    }
-  }
-
   pcl::PointCloud<pcl::PointXYZ> clipPolygon;
   clipPolygon.push_back(pcl::PointXYZ(polygon[0].first, polygon[0].second, 0));
   clipPolygon.push_back(pcl::PointXYZ(polygon[1].first, polygon[1].second, 0));
@@ -473,25 +460,109 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   clipPolygon.push_back(pcl::PointXYZ(polygon[3].first, polygon[3].second, 0));
   clipPolygon.push_back(pcl::PointXYZ(polygon[0].first, polygon[0].second, 0));
 
-  for (int x = 0; x < pointCloud->width; x++)
-  {
-    for (int y = 0; y < pointCloud->height; y++)
-    {
-        int i = x + (pointCloud->width * y);
+  // generate the transform from depth_camera_reference frame to rgb_camera_reference frame
+  tf::Transform depth_to_rgb_transform;
+  string rgb_camera_frame_name = rgb_info->header.frame_id;
+  string depth_camera_frame_name = cloud->header.frame_id;
 
-        pcl::PointXYZ point(x, y, 0 );
+  getTransform(rgb_camera_frame_name, depth_camera_frame_name, depth_to_rgb_transform);
 
-        if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, clipPolygon))
-        {
-          polygonInlierIndices->indices.push_back(i);
-        }
-    }
+  // generate a projection from rgb_camera_reference frame to image frame that is the P matrix in the rgb_info object
+  pcl::PointCloud<pcl::PointXYZRGB> point_cloud_in_rgb_frame;
+
+  pcl_ros::transformPointCloud(*pointCloud, point_cloud_in_rgb_frame, depth_to_rgb_transform);
+  point_cloud_in_rgb_frame.header.frame_id = rgb_camera_frame_name;
+  ROS_DEBUG_THROTTLE(5.0, "about to analyze the cloud");
+
+  float minX = 10000;
+  float minY = 10000;
+  float maxX = -10000;
+  float maxY = -10000;
+
+  float minXrgb = 10000;
+  float minYrgb = 10000;
+  float maxXrgb = -10000;
+  float maxYrgb = -10000;
+
+  double fx;
+  double fy;
+  double cx;
+  double tx = 0;
+  double cy;
+  double ty = 0;
+  if (projected_optics_) {
+    // use projected focal length and principal point
+    // these are the correct values
+    fx = rgb_info->P[0];
+    fy = rgb_info->P[5];
+    cx = rgb_info->P[2];
+    cy = rgb_info->P[6];
+    tx = rgb_info->P[3];
+    ty = rgb_info->P[7];
+
+  } else {
+    // use camera intrinsic focal length and principal point
+    // for backwards compatability
+    fx = rgb_info->K[0];
+    fy = rgb_info->K[4];
+    cx = rgb_info->K[2];
+    cy = rgb_info->K[5];
   }
 
+
+  for (int i = 0; i!=point_cloud_in_rgb_frame.size(); ++i) {
+
+      Eigen::Vector3f point{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
+
+
+      double inv_Z = 1.0 /point[2];
+      float u_rgb = std::round((fx*(point[0]) + tx)*inv_Z + cx + 0.5);
+      float v_rgb = std::round((fy*(point[1]) + ty)*inv_Z + cy + 0.5);
+
+      pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0.0f};
+      if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(pcl_point, clipPolygon))
+      {
+        polygonInlierIndices->indices.push_back(i);
+        minX = minX < point[0] ? minX : point[0];
+        minY = minY < point[1] ? minY : point[1];
+        maxX = maxX > point[0] ? maxX : point[0];
+        maxY = maxY > point[1] ? maxY : point[1];
+      }
+
+      pcl::PointXYZ temp{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
+      if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(temp, clipPolygon))
+      {
+        minXrgb = minXrgb < temp.x ? minXrgb : temp.x;
+        minYrgb = minYrgb < temp.y ? minYrgb : temp.y;
+        maxXrgb = maxXrgb > temp.x ? maxXrgb : temp.x;
+        maxYrgb = maxYrgb > temp.y ? maxYrgb : temp.y;
+      }
+  }
+
+  ROS_DEBUG_THROTTLE(5.0, "rgb frame points range was minX %f minY %f maxX %f maxY %f", minXrgb, minYrgb, maxXrgb, maxYrgb);
+
+
+  ROS_DEBUG_THROTTLE(5.0, "projected points range was minX %f minY %f maxX %f maxY %f", minX, minY, maxX, maxY);
   ROS_DEBUG_THROTTLE(5.0, "Points in detection polygon: %zu", polygonInlierIndices->indices.size());
 
+  if (polygonInlierIndices->indices.size() > 0) {
+    int i = polygonInlierIndices->indices[0];
+    Eigen::Vector3f point{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
+
+
+    double inv_Z = 1.0 /point[2];
+    float u_rgb = std::round((fx*(point[0]-.04) + tx)*inv_Z + cx + 0.5); //-12
+    float v_rgb = std::round((fy*(point[1]-.01) + ty)*inv_Z + cy + 0.5);  //-5
+
+
+    pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0.0f};
+    ROS_DEBUG_THROTTLE(5.0,"point %d with xyz coordinates %f %f %f with rgb coordinates %f %f %f has image projection %f %f %f is an inliner", i, pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z, point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z, pcl_point.x, pcl_point.y, pcl_point.z);
+
+
+  }
+
   pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-  extract.setInputCloud(pointCloud);
+  extract.setInputCloud(point_cloud_in_rgb_frame.makeShared());
   extract.setIndices(polygonInlierIndices);
   extract.setNegative(false);
   extract.filter(*polygonInliers);
