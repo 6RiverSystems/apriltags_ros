@@ -130,6 +130,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   image_pub_ = it_.advertise("tag_detections_image", 1);
   plane_cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("plane_cloud", 1);
+  clip_polygon_cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("clip_polygon_cloud", 1);
 
   detections_pub_ = nh.advertise<AprilTagDetectionArray>("tag_detections", 1);
   pose_pub_ = nh.advertise<geometry_msgs::PoseArray>("tag_detections_pose", 1);
@@ -521,7 +522,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   ROS_WARN("HERE %d %s name of the rgb_camera frame %s name of the depth camera frame %s", __LINE__, __FILE__, rgb_camera_frame_name.c_str(), depth_camera_frame_name.c_str());
 
-  getTransform(rgb_camera_frame_name, depth_camera_frame_name, depth_to_rgb_transform);
+  //getTransform(rgb_camera_frame_name, depth_camera_frame_name, depth_to_rgb_transform);
 
   // generate a projection from rgb_camera_reference frame to image frame that is the P matrix in the rgb_info object
 
@@ -529,12 +530,12 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   pcl::PointCloud<pcl::PointXYZRGB> point_cloud_in_rgb_frame;
 
-  //long double Bx = depth_info->P[3]/(-1 * depth_info->P[0]);
-  //ROS_WARN("HERE %d %s Bx = %f", __LINE__, __FILE__, Bx);
-  //long double By = 0;//depth_info->P[7]/-depth_info->P[1];
+  long double Bx = depth_info->P[3]/(-1 * depth_info->P[0]);
+  ROS_WARN("HERE %d %s Bx = %f", __LINE__, __FILE__, Bx);
+  long double By = 0;//depth_info->P[7]/-depth_info->P[1];
 
-  //depth_to_rgb_transform.setIdentity();
-  //depth_to_rgb_transform.setOrigin(tf::Vector3{Bx,By,0});
+  depth_to_rgb_transform.setIdentity();
+  depth_to_rgb_transform.setOrigin(tf::Vector3{depth_info->P[3],depth_info->P[7],depth_info->P[11]});
   pcl_ros::transformPointCloud(*pointCloud, point_cloud_in_rgb_frame, depth_to_rgb_transform);
 
     //std::for_each(pointCloud->begin(), pointCloud->end(), [&depth_to_rgb_transform](pcl::PointXYZRGB & point) -> void {
@@ -675,7 +676,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   }
 
   pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-  extract.setInputCloud(point_cloud_in_rgb_frame.makeShared());
+  extract.setInputCloud(pointCloud);
   extract.setIndices(polygonInlierIndices);
   extract.setNegative(false);
   extract.filter(*polygonInliers);
@@ -696,6 +697,12 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   seg.setInputCloud(polygonInliers);
   seg.segment(*planeInlierIndices, *coefficients);
+
+
+    clipPolygon.header.frame_id = rgb_camera_frame_name;
+    sensor_msgs::PointCloud2 clipPolygonMsg;
+    pcl::toROSMsg(clipPolygon, clipPolygonMsg);
+    clip_polygon_cloud_pub_.publish(clipPolygonMsg);
 
   if (planeInlierIndices->indices.size () == 0)
   {
