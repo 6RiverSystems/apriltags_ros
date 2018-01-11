@@ -15,6 +15,7 @@
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <image_geometry/pinhole_camera_model.h>
 
 namespace apriltags_ros{
 
@@ -40,13 +41,13 @@ class AprilTagDetector{
  private:
   void enableCb(const std_msgs::Bool& msg);
   void imageCb(const sensor_msgs::PointCloud2ConstPtr& depth_msg, const sensor_msgs::ImageConstPtr& rgb_msg_in,
-		const sensor_msgs::CameraInfoConstPtr& rgb_info_msg, const sensor_msgs::CameraInfoConstPtr& depth_info_msg);
+		const sensor_msgs::CameraInfoConstPtr& info_msg);
   std::map<int, AprilTagDescription> parse_tag_descriptions(XmlRpc::XmlRpcValue& april_tag_descriptions);
   bool getTransform(std::string t1, std::string t2, tf::Transform& output);
 
   tf::Transform getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-    const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info,
-    std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxis);
+    std::pair<float,float> polygon[4], const sensor_msgs::CameraInfo& rgb_cam_info,
+    AprilTags::TagDetection& detection, tf::Vector3 xAxis);
 
  private:
   std::map<int, AprilTagDescription> descriptions_;
@@ -58,12 +59,11 @@ class AprilTagDetector{
   ros::NodeHandlePtr rgb_nh_;
   image_transport::ImageTransport it_;
   message_filters::Subscriber<sensor_msgs::PointCloud2> sub_point_cloud_;
-  message_filters::Subscriber<sensor_msgs::CameraInfo> sub_rgb_info_;
-  message_filters::Subscriber<sensor_msgs::CameraInfo> sub_depth_info_;
+  message_filters::Subscriber<sensor_msgs::CameraInfo> sub_info_;
 
   image_transport::SubscriberFilter sub_rgb_;
 
-  typedef ExactTime<sensor_msgs::PointCloud2, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> SyncPolicy;
+  typedef ExactTime<sensor_msgs::PointCloud2, sensor_msgs::Image, sensor_msgs::CameraInfo> SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Synchronizer;
   boost::shared_ptr<Synchronizer> sync_;
 
@@ -77,15 +77,16 @@ class AprilTagDetector{
   boost::shared_ptr<AprilTags::TagDetector> tag_detector_;
   bool projected_optics_;
   bool enabled_;
-  bool same_frame_id_;
   int decimate_count_;
   int decimate_rate_;
   float plane_model_distance_threshold_;
   float plane_inlier_threshold_;
   float plane_angle_threshold_;
-  bool publish_plane_cloud_;
 
   tf::TransformListener tf_listener_;
+  tf::Transform tfDepthToRgb_;
+
+  std::string rgbd_frame_id_;
   std::string output_frame_id_;
 };
 
