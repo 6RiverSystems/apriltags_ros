@@ -67,7 +67,6 @@ class AprilTagDetector{
 
   image_transport::Publisher image_pub_;
   ros::Publisher plane_cloud_pub_;
-  ros::Publisher detection_area_poly_pub_;
   ros::Publisher detections_pub_;
   ros::Publisher pose_pub_;
   ros::Publisher plane_pose_pub_;

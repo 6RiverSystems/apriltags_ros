@@ -124,7 +124,6 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   sub_point_cloud_.subscribe(nh, "cloud_rect", 5);
 
   image_pub_ = it_.advertise("tag_detections_image", 1);
-  detection_area_poly_pub_ = nh.advertise<geometry_msgs::PolygonStamped>("april_tag_detection_poly", 1);
   plane_cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("plane_cloud", 1);
 
   detections_pub_ = nh.advertise<AprilTagDetectionArray>("tag_detections", 1);
@@ -168,6 +167,8 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", output_frame_id_.c_str());
         return;
       }
+
+      rgb_model_.fromCameraInfo(cam_info);
     }
     else
     {
@@ -467,8 +468,13 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   clipPolygon.push_back(pcl::PointXYZ(polygon[3].first, polygon[3].second, 0));
   clipPolygon.push_back(pcl::PointXYZ(polygon[0].first, polygon[0].second, 0));
 
-  // Transform the clipping polygon from rgb frame to the point cloud frame
-  pcl_ros::transformPointCloud(clipPolygon, clipPolygon, tfDepthToRgb_);
+  // Convert from depth optical frame to rgb optical frame
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pointCloudRgbImage(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl_ros::transformPointCloud(pointCloud, pointCloudRgbImage, tfDepthToRgb_);
+
+  double rgb_fx = rgb_model_.fx(), rgb_fy = rgb_model_.fy();
+  double rgb_cx = rgb_model_.cx(), rgb_cy = rgb_model_.cy();
+  double rgb_Tx = rgb_model_.Tx(), rgb_Ty = rgb_model_.Ty();
 
   for (int x = 0; x < pointCloud->width; x++)
   {
@@ -476,7 +482,12 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
     {
         int i = x + (pointCloud->width * y);
 
-        pcl::PointXYZ point(x, y, 0 );
+        // Project to (u,v) in RGB image
+        double inv_Z = 1.0 / xyz_rgb.z();
+        int u_rgb = (rgb_fx * x + rgb_Tx) * inv_Z + rgb_cx + 0.5;
+        int v_rgb = (rgb_fy * y + rgb_Ty) * inv_Z + rgb_cy + 0.5;
+
+        pcl::PointXYZ point(u_rgb, v_rgb, 0 );
 
         if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, clipPolygon))
         {
@@ -533,18 +544,6 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
       planeInliersRos.header.frame_id = cloud->header.frame_id;
       pcl::toROSMsg(*planeInliers, planeInliersRos);
       plane_cloud_pub_.publish(planeInliersRos);
-
-      geometry_msgs::PolygonStamped detectionAreaPolygon;
-      detectionAreaPolygon.header.frame_id = cloud->header.frame_id;
-      for (auto point : clipPolygon)
-      {
-        geometry_msgs::Point32 msgPoint;
-        msgPoint.x = point.x;
-        msgPoint.y = point.y;
-        detectionAreaPolygon.polygon.points.push_back(msgPoint);
-      }
-
-      detection_area_poly_pub_.publish(detectionAreaPolygon);
     }
 
     // Pick a threshold
