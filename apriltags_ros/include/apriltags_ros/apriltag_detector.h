@@ -46,7 +46,8 @@ class AprilTagDetector{
   bool getTransform(std::string t1, std::string t2, tf::Transform& output);
 
   tf::Transform getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-    std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxis);
+    std::pair<float,float> polygon[4], const sensor_msgs::CameraInfo& rgb_cam_info,
+    AprilTags::TagDetection& detection, tf::Vector3 xAxis);
 
  private:
   std::map<int, AprilTagDescription> descriptions_;
