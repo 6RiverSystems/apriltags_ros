@@ -164,14 +164,14 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     // Check for bad inputs
     if (cloud->header.frame_id != rgb_msg_in->header.frame_id)
     {
-      if (!getTransform(cloud->header.frame_id, rgb_msg_in->header.frame_id, tfRgbToCloud_)) {
+      if (!getTransform(rgb_msg_in->header.frame_id, cloud->header.frame_id, tfDepthToRgb_)) {
         ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", output_frame_id_.c_str());
         return;
       }
     }
     else
     {
-      tfRgbToCloud_ = tf::Transform::getIdentity();
+      tfDepthToRgb_ = tf::Transform::getIdentity();
     }
 
     cv_bridge::CvImagePtr cv_ptr;
@@ -468,7 +468,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   clipPolygon.push_back(pcl::PointXYZ(polygon[0].first, polygon[0].second, 0));
 
   // Transform the clipping polygon from rgb frame to the point cloud frame
-  pcl_ros::transformPointCloud(clipPolygon, clipPolygon, tfRgbToCloud_);
+  pcl_ros::transformPointCloud(clipPolygon, clipPolygon, tfDepthToRgb_);
 
   for (int x = 0; x < pointCloud->width; x++)
   {
