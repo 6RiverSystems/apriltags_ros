@@ -81,7 +81,6 @@ class AprilTagDetector{
   float plane_model_distance_threshold_;
   float plane_inlier_threshold_;
   float plane_angle_threshold_;
-  image_geometry::PinholeCameraModel rgb_model_;
 
   tf::TransformListener tf_listener_;
   tf::Transform tfDepthToRgb_;

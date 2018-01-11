@@ -164,8 +164,6 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         ROS_WARN_THROTTLE(10.0, "Could not get transform to specified frame %s.", rgbd_frame_id_.c_str());
         return;
       }
-
-      rgb_model_.fromCameraInfo(cam_info);
     }
     else
     {
@@ -469,12 +467,25 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   pcl::PointCloud<pcl::PointXYZ>::Ptr pointCloudRgbImage(new pcl::PointCloud<pcl::PointXYZ>);
   pcl_ros::transformPointCloud(*pointCloud, *pointCloudRgbImage, tfDepthToRgb_);
 
-  double rgb_fx = rgb_model_.fx();
-  double rgb_fy = rgb_model_.fy();
-  double rgb_cx = rgb_model_.cx();
-  double rgb_cy = rgb_model_.cy();
-  double rgb_Tx = rgb_model_.Tx();
-  double rgb_Ty = rgb_model_.Ty();
+  double fx;
+  double fy;
+  double px;
+  double py;
+  if (projected_optics_) {
+    // use projected focal length and principal point
+    // these are the correct values
+    fx = rgb_cam_info->P[0];
+    fy = rgb_cam_info->P[5];
+    px = rgb_cam_info->P[2];
+    py = rgb_cam_info->P[6];
+  } else {
+    // use camera intrinsic focal length and principal point
+    // for backwards compatability
+    fx = rgb_cam_info->K[0];
+    fy = rgb_cam_info->K[4];
+    px = rgb_cam_info->K[2];
+    py = rgb_cam_info->K[5];
+  }
 
   for( size_t i = 0; i < pointCloudRgbImage->points.size(); i++)
   {
@@ -484,8 +495,8 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
     // Project to (u,v) in RGB image
     double inv_Z = 1.0 / z;
-    int u_rgb = (rgb_fx * x + rgb_Tx) * inv_Z + rgb_cx + 0.5;
-    int v_rgb = (rgb_fy * y + rgb_Ty) * inv_Z + rgb_cy + 0.5;
+    int u_rgb = (fx * x + rgb_Tx) * inv_Z + px + 0.5;
+    int v_rgb = (fy * y + rgb_Ty) * inv_Z + py + 0.5;
 
     pcl::PointXYZ point(u_rgb, v_rgb, 0 );
 
