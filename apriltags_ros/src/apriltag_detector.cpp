@@ -472,15 +472,18 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   pcl::PointCloud<pcl::PointXYZ>::Ptr pointCloudRgbImage(new pcl::PointCloud<pcl::PointXYZ>);
   pcl_ros::transformPointCloud(*pointCloudRgbImage, *pointCloud, tfDepthToRgb_);
 
-  double rgb_fx = rgb_model_.fx(), rgb_fy = rgb_model_.fy();
-  double rgb_cx = rgb_model_.cx(), rgb_cy = rgb_model_.cy();
-  double rgb_Tx = rgb_model_.Tx(), rgb_Ty = rgb_model_.Ty();
+  double rgb_fx = rgb_model_.fx();
+  double rgb_fy = rgb_model_.fy();
+  double rgb_cx = rgb_model_.cx();
+  double rgb_cy = rgb_model_.cy();
+  double rgb_Tx = rgb_model_.Tx();
+  double rgb_Ty = rgb_model_.Ty();
 
   for( size_t i = 0; i < pointCloudRgbImage->points.size(); i++)
   {
-    uint32_t x = pointCloudRgbImage->points[i].x;
-    uint32_t y = pointCloudRgbImage->points[i].y;
-    uint32_t z = pointCloudRgbImage->points[i].z;
+    double x = pointCloudRgbImage->points[i].x;
+    double y = pointCloudRgbImage->points[i].y;
+    double z = pointCloudRgbImage->points[i].z;
 
     // Project to (u,v) in RGB image
     double inv_Z = 1.0 / z;
