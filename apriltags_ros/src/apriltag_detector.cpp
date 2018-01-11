@@ -470,29 +470,28 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
   // Convert from depth optical frame to rgb optical frame
   pcl::PointCloud<pcl::PointXYZ>::Ptr pointCloudRgbImage(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl_ros::transformPointCloud(*pointCloud, *pointCloudRgbImage, tfDepthToRgb_);
+  pcl_ros::transformPointCloud(*pointCloudRgbImage, *pointCloud, tfDepthToRgb_);
 
   double rgb_fx = rgb_model_.fx(), rgb_fy = rgb_model_.fy();
   double rgb_cx = rgb_model_.cx(), rgb_cy = rgb_model_.cy();
   double rgb_Tx = rgb_model_.Tx(), rgb_Ty = rgb_model_.Ty();
 
-  for (int x = 0; x < pointCloud->width; x++)
+  for( size_t i = 0; i < pointCloudRgbImage->points.size(); i++)
   {
-    for (int y = 0; y < pointCloud->height; y++)
+    uint32_t x = pointCloudRgbImage->points[i].x;
+    uint32_t y = pointCloudRgbImage->points[i].y;
+    uint32_t z = pointCloudRgbImage->points[i].z;
+
+    // Project to (u,v) in RGB image
+    double inv_Z = 1.0 / z;
+    int u_rgb = (rgb_fx * x + rgb_Tx) * inv_Z + rgb_cx + 0.5;
+    int v_rgb = (rgb_fy * y + rgb_Ty) * inv_Z + rgb_cy + 0.5;
+
+    pcl::PointXYZ point(u_rgb, v_rgb, 0 );
+
+    if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, clipPolygon))
     {
-        int i = x + (pointCloud->width * y);
-
-        // Project to (u,v) in RGB image
-        double inv_Z = 1.0 / xyz_rgb.z();
-        int u_rgb = (rgb_fx * x + rgb_Tx) * inv_Z + rgb_cx + 0.5;
-        int v_rgb = (rgb_fy * y + rgb_Ty) * inv_Z + rgb_cy + 0.5;
-
-        pcl::PointXYZ point(u_rgb, v_rgb, 0 );
-
-        if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, clipPolygon))
-        {
-          polygonInlierIndices->indices.push_back(i);
-        }
+      polygonInlierIndices->indices.push_back(i);
     }
   }
 
