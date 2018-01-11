@@ -36,8 +36,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   decimate_count_(0),
   plane_model_distance_threshold_(0.01),
   plane_inlier_threshold_(0.7f),
-  plane_angle_threshold_(0.0872665f),
-  publish_plane_cloud_(false)
+  plane_angle_threshold_(0.0872665f)
 {
   XmlRpc::XmlRpcValue april_tag_descriptions;
   if(!pnh.getParam("tag_descriptions", april_tag_descriptions)){
@@ -89,8 +88,6 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   pnh.param<int>("decimate_rate", decimate_rate_, 3);
 
-  pnh.param<bool>("publish_plane_cloud", publish_plane_cloud_, false);
-
   pnh.param<float>("plane_model_distance_threshold", plane_model_distance_threshold_, 0.01f);
 
   pnh.param<float>("plane_inlier_threshold", plane_inlier_threshold_, 0.7f);
@@ -105,10 +102,8 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   int queue_size = 100;
   pnh.param("queue_size", queue_size, 100);
 
-  ROS_INFO("April tag info: start_enabled: %d, publish_plane_cloud: %d, plane_inlier_threshold: %f",
-    enabled_,
-    publish_plane_cloud_,
-    plane_inlier_threshold_);
+  ROS_INFO("April tag info: start_enabled: %d, plane_inlier_threshold: %f",
+    enabled_, plane_inlier_threshold_);
 
   enable_sub_ = nh.subscribe("enable", 1, &AprilTagDetector::enableCb, this);
   tag_detector_= boost::shared_ptr<AprilTags::TagDetector>(new AprilTags::TagDetector(*tag_codes));
@@ -501,7 +496,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   ROS_DEBUG_THROTTLE(5.0, "Points in detection polygon: %zu", polygonInlierIndices->indices.size());
 
   pcl::ExtractIndices<pcl::PointXYZ> extract;
-  extract.setInputCloud(pointCloud);
+  extract.setInputCloud(pointCloudRgbImage);
   extract.setIndices(polygonInlierIndices);
   extract.setNegative(false);
   extract.filter(*polygonInliers);
@@ -533,7 +528,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
     ROS_DEBUG_THROTTLE(5.0, "Points in plane: %zu out of %zu", numIndices, polygonInliers->size());
 
-    if (publish_plane_cloud_)
+    if (publish_plane_cloud_.getNumSubscribers() > 0)
     {
       // Extract the inliers
       pcl::ExtractIndices<pcl::PointXYZ> extract;
