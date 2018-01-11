@@ -536,7 +536,8 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   //depth_to_rgb_transform.setIdentity();
   //depth_to_rgb_transform.setOrigin(tf::Vector3{Bx,By,0});
   pcl_ros::transformPointCloud(*pointCloud, point_cloud_in_rgb_frame, depth_to_rgb_transform);
-  //std::for_each(pointCloud->begin(), pointCloud->end(), [&depth_to_rgb_transform](pcl::PointXYZRGB & point) -> void {
+
+    //std::for_each(pointCloud->begin(), pointCloud->end(), [&depth_to_rgb_transform](pcl::PointXYZRGB & point) -> void {
     //tf::Vector3 pcl_point(point.x, point.y, point.z); pcl_point = depth_to_rgb_transform * pcl_point; point.x = pcl_point.x(); point.y = pcl_point.y(); point.z = pcl_point.z(); });
 
 
@@ -551,9 +552,12 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
     projection_mat << rgb_info->P[0], rgb_info->P[1], rgb_info->P[2], rgb_info->P[4], rgb_info->P[5], rgb_info->P[6], rgb_info->P[8], rgb_info->P[9], rgb_info->P[10];
 
     for (int i = 0; i != 12; ++i) {
-        ROS_WARN("HERE %d %s p[%d] = %f", __LINE__, __FILE__, i, rgb_info->P[i]);
+        ROS_WARN("HERE %d %s rgb_info->p[%d] = %f", __LINE__, __FILE__, i, rgb_info->P[i]);
     }
 
+    for (int i = 0; i != 12; ++i) {
+        ROS_WARN("HERE %d %s depth_info->p[%d] = %f", __LINE__, __FILE__, i, depth_info->P[i]);
+    }
   ROS_DEBUG_THROTTLE(5.0, "about to analyze the cloud");
   ROS_WARN("HERE %d %s about to analyze the cloud", __LINE__, __FILE__);
 
@@ -604,10 +608,10 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
 
       double inv_Z = 1.0 /point[2];
-      int u_rgb = (fx*(point[0]-.04) + tx)*inv_Z + cx + 0.5; //-12
-      int v_rgb = (fy*(point[1]-.01) + ty)*inv_Z + cy + 0.5;  //-5
-      //int u_rgb = (fx*(point[0]) + tx)*inv_Z + cx + 0.5; //-12
-      //int v_rgb = (fy*(point[1]) + ty)*inv_Z + cy + 0.5;  //-5
+      //int u_rgb = (fx*(point[0]-.04) + tx)*inv_Z + cx + 0.5; //-12
+      //int v_rgb = (fy*(point[1]-.01) + ty)*inv_Z + cy + 0.5;  //-5
+      int u_rgb = (fx*(point[0]) + tx)*inv_Z + cx + 0.5; //-12
+      int v_rgb = (fy*(point[1]) + ty)*inv_Z + cy + 0.5;  //-5
 
 
         //point = projection_mat * point;
