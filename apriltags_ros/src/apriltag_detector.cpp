@@ -147,7 +147,7 @@ double absoluteAngleDiff(double angleA, double angleB)
 
 void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
   const sensor_msgs::ImageConstPtr& rgb_msg_in,
-  const sensor_msgs::CameraInfoConstPtr& rgb_cam_info) {
+  const sensor_msgs::CameraInfoConstPtr& rgb_cam_info, const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
 
   // Check for trigger / timing
   if (!enabled_) {
@@ -233,7 +233,6 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
       AprilTagDescription description = description_itr->second;
       double tag_size = description.size();
-
       ROS_DEBUG_THROTTLE(5.0, "April Tag detected in rect: %f, %f - %f, %f - %f, %f - %f, %f", detection.p[0].first, detection.p[0].second,
         detection.p[1].first, detection.p[1].second, detection.p[2].first, detection.p[2].second,
         detection.p[3].first, detection.p[3].second);
@@ -347,14 +346,17 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       }
 
       // Publish both poses either way to debug/visualise
+
       tag_pose_array.poses.push_back(tag_pose.pose);
       plane_pose_array.poses.push_back(planePose);
    }
+
     detections_pub_.publish(tag_detection_array);
     pose_pub_.publish(tag_pose_array);
     plane_pose_pub_.publish(plane_pose_array);
     image_pub_.publish(cv_ptr->toImageMsg());
   }
+
 }
 
 std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlRpc::XmlRpcValue& tag_descriptions){
@@ -441,7 +443,8 @@ tf::Transform getPlaneTransform(pcl::ModelCoefficients coeffs, tf::Vector3 xAxis
 }
 
 tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-  const sensor_msgs::CameraInfoConstPtr& rgb_info, std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxisVector)
+  const sensor_msgs::CameraInfoConstPtr& rgb_info,   const sensor_msgs::CameraInfoConstPtr& depth_info,
+  std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxisVector)
 {
   tf::Transform transform = tf::Transform::getIdentity();
 
@@ -465,14 +468,15 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
   string rgb_camera_frame_name = rgb_info->header.frame_id;
   string depth_camera_frame_name = cloud->header.frame_id;
 
-  getTransform(rgb_camera_frame_name, depth_camera_frame_name, depth_to_rgb_transform);
-
-  // generate a projection from rgb_camera_reference frame to image frame that is the P matrix in the rgb_info object
   pcl::PointCloud<pcl::PointXYZRGB> point_cloud_in_rgb_frame;
 
+  depth_to_rgb_transform.setIdentity();
+  depth_to_rgb_transform.setOrigin(tf::Vector3{depth_info->P[3],depth_info->P[7],depth_info->P[11]});
   pcl_ros::transformPointCloud(*pointCloud, point_cloud_in_rgb_frame, depth_to_rgb_transform);
+
   point_cloud_in_rgb_frame.header.frame_id = rgb_camera_frame_name;
   ROS_DEBUG_THROTTLE(5.0, "about to analyze the cloud");
+
 
   float minX = 10000;
   float minY = 10000;
@@ -511,55 +515,40 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
 
 
   for (int i = 0; i!=point_cloud_in_rgb_frame.size(); ++i) {
+     Eigen::Vector3f point{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
 
-      Eigen::Vector3f point{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
+     double inv_Z = 1.0 /point[2];
+     double u_rgb = std::round((fx*point[0] + tx)*inv_Z + cx + 0.5);
+     double v_rgb = std::round((fy*point[1] + ty)*inv_Z + cy + 0.5);
 
 
-      double inv_Z = 1.0 /point[2];
-      float u_rgb = std::round((fx*(point[0]) + tx)*inv_Z + cx + 0.5);
-      float v_rgb = std::round((fy*(point[1]) + ty)*inv_Z + cy + 0.5);
+     pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0};
+     if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(pcl_point, clipPolygon))
+     {
+       polygonInlierIndices->indices.push_back(i);
+       minX = minX < point[0] ? minX : point[0];
+       minY = minY < point[1] ? minY : point[1];
+       maxX = maxX > point[0] ? maxX : point[0];
+       maxY = maxY > point[1] ? maxY : point[1];
+     }
 
-      pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0.0f};
-      if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(pcl_point, clipPolygon))
-      {
-        polygonInlierIndices->indices.push_back(i);
-        minX = minX < point[0] ? minX : point[0];
-        minY = minY < point[1] ? minY : point[1];
-        maxX = maxX > point[0] ? maxX : point[0];
-        maxY = maxY > point[1] ? maxY : point[1];
-      }
+     pcl::PointXYZ temp{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
+     if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(temp, clipPolygon))
+     {
+       minXrgb = minXrgb < temp.x ? minXrgb : temp.x;
+       minYrgb = minYrgb < temp.y ? minYrgb : temp.y;
+       maxXrgb = maxXrgb > temp.x ? maxXrgb : temp.x;
+       maxYrgb = maxYrgb > temp.y ? maxYrgb : temp.y;
+     }
 
-      pcl::PointXYZ temp{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
-      if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(temp, clipPolygon))
-      {
-        minXrgb = minXrgb < temp.x ? minXrgb : temp.x;
-        minYrgb = minYrgb < temp.y ? minYrgb : temp.y;
-        maxXrgb = maxXrgb > temp.x ? maxXrgb : temp.x;
-        maxYrgb = maxYrgb > temp.y ? maxYrgb : temp.y;
-      }
   }
+
 
   ROS_DEBUG_THROTTLE(5.0, "rgb frame points range was minX %f minY %f maxX %f maxY %f", minXrgb, minYrgb, maxXrgb, maxYrgb);
 
 
   ROS_DEBUG_THROTTLE(5.0, "projected points range was minX %f minY %f maxX %f maxY %f", minX, minY, maxX, maxY);
   ROS_DEBUG_THROTTLE(5.0, "Points in detection polygon: %zu", polygonInlierIndices->indices.size());
-
-  if (polygonInlierIndices->indices.size() > 0) {
-    int i = polygonInlierIndices->indices[0];
-    Eigen::Vector3f point{point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z};
-
-
-    double inv_Z = 1.0 /point[2];
-    float u_rgb = std::round((fx*(point[0]-.04) + tx)*inv_Z + cx + 0.5); //-12
-    float v_rgb = std::round((fy*(point[1]-.01) + ty)*inv_Z + cy + 0.5);  //-5
-
-
-    pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0.0f};
-    ROS_DEBUG_THROTTLE(5.0,"point %d with xyz coordinates %f %f %f with rgb coordinates %f %f %f has image projection %f %f %f is an inliner", i, pointCloud->points[i].x, pointCloud->points[i].y, pointCloud->points[i].z, point_cloud_in_rgb_frame.points[i].x, point_cloud_in_rgb_frame.points[i].y, point_cloud_in_rgb_frame.points[i].z, pcl_point.x, pcl_point.y, pcl_point.z);
-
-
-  }
 
   pcl::ExtractIndices<pcl::PointXYZRGB> extract;
   extract.setInputCloud(point_cloud_in_rgb_frame.makeShared());

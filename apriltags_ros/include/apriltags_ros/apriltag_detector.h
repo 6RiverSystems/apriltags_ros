@@ -45,7 +45,7 @@ class AprilTagDetector{
   bool getTransform(const std::string & target_frame, const std::string & source_frame, tf::Transform& output);
 
   tf::Transform getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-    const sensor_msgs::CameraInfoConstPtr& rgb_info,
+    const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info_msg,
     std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxis);
 
  private:
@@ -71,6 +71,7 @@ class AprilTagDetector{
   ros::Publisher detections_pub_;
   ros::Publisher pose_pub_;
   ros::Publisher plane_pose_pub_;
+
   ros::Subscriber enable_sub_;
   tf::TransformBroadcaster tf_pub_;
   boost::shared_ptr<AprilTags::TagDetector> tag_detector_;
