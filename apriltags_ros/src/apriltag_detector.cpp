@@ -115,11 +115,12 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   rgb_it_.reset( new image_transport::ImageTransport(nh) );
 
-  sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_point_cloud_, sub_rgb_, sub_rgb_info_) );
-  sync_->registerCallback(boost::bind(&AprilTagDetector::imageCb, this, _1, _2, _3));
+  sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_point_cloud_, sub_rgb_, sub_rgb_info_, sub_depth_info_) );
+  sync_->registerCallback(boost::bind(&AprilTagDetector::imageCb, this, _1, _2, _3, _4));
 
   sub_rgb_.subscribe(*rgb_it_, "image_rect", 5);
   sub_rgb_info_.subscribe(nh, "rgb_camera_info", 5);
+  sub_depth_info_.subscribe(nh, "depth_camera_info", 5);
 
   sub_point_cloud_.subscribe(nh, "cloud_rect", 5);
 
@@ -258,7 +259,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       // Align the x axis to the detected plane for the purposes of alignment and visualization
       tf::Vector3 xAxis(rot(0,0), rot(1,0), rot(2,0));
 
-      tf::Transform planeTransform = getDepthImagePlaneTransform(cloud, rgb_cam_info, detection.p, detection, xAxis);
+      tf::Transform planeTransform = getDepthImagePlaneTransform(cloud, rgb_cam_info, depth_cam_info, detection.p, detection, xAxis);
 
       tf::Matrix3x3 aprilTagRotation;
       tf::matrixEigenToTF(rot, aprilTagRotation);
