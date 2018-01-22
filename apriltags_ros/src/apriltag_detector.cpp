@@ -523,7 +523,7 @@ tf::Transform AprilTagDetector::getDepthImagePlaneTransform(const sensor_msgs::P
      double v_rgb = std::round((fy*point[1] + ty)*inv_Z + cy + 0.5);
 
 
-     pcl::PointXYZ pcl_point{u_rgb, v_rgb, 0};
+     pcl::PointXYZ pcl_point{static_cast<float>(u_rgb), static_cast<float>(v_rgb), 0};
      if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(pcl_point, clipPolygon))
      {
        polygonInlierIndices->indices.push_back(i);
