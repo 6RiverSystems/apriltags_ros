@@ -26,7 +26,14 @@
 #include <cmath>
 #include <Eigen/Core>
 #include <pcl_ros/transforms.h>
+#include <deque>
+#include <chrono>
+#include <algorithm>
+#include "angles/angles.h"
+
 namespace apriltags_ros{
+
+
 
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   it_(nh),
@@ -98,6 +105,17 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   pnh.param<float>("plane_angle_threshold", plane_angle_threshold_,0.0872665f);
   plane_angle_threshold_ = std::max(0.0f, std::min(90.0f, plane_angle_threshold_));
+
+
+  pnh.param<float>("tf_pose_acceptance_error_range", tf_pose_acceptance_error_range_, 4);
+  tf_pose_acceptance_error_range_ = std::max(0.0f, std::min(90.0f, tf_pose_acceptance_error_range_));
+
+  pnh.param<int>("max_number_of_detection_instances_per_tag", max_number_of_detection_instances_per_tag_,5);
+  max_number_of_detection_instances_per_tag_= std::max(0.0, std::min(20, max_number_of_detection_instances_per_tag_));
+
+  int detection_time_out = 60;
+  pnh.param<int>("valid_detection_time_out", detection_time_out, 60);
+  valid_detection_time_out_ = chrono::seconds(std::max(0, std::min(180, detection_time_out)));
 
   pcl::console::setVerbosityLevel(pcl::console::L_ALWAYS);
 
@@ -339,12 +357,23 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         tag_detection.pose = tag_pose;
         tag_detection.id = detection.id;
         tag_detection.size = tag_size;
-        tag_detection_array.detections.push_back(tag_detection);
+        //tag_detection_array.detections.push_back(tag_detection);
 
-        tf::Stamped<tf::Transform> tag_transform;
-        tf::poseStampedMsgToTF(tag_pose, tag_transform);
-        tf_pub_.sendTransform(tf::StampedTransform(tag_transform, tag_transform.stamp_, tag_transform.frame_id_, description.frame_name()));
+        if (trackedAprilTags_.find(detection.id) == trackedAprilTags_.end()) {
+          auto sp = std::make_shared<DetectionPosesQueueWrapper>();
+          trackedAprilTags_[detection.id] = sp;
+        }
+        auto match = trackedAprilTags_[detection.id]; // we either have a match or we just created one
+
+        match->posesQueue_.push_back(tag_detection);
+        match->descriptionsQueue_.push_back(description);
+        match->lastUpdated_ = std::chrono::steady_clock::now();
+
+
+
       }
+
+
 
       // Publish both poses either way to debug/visualise
 
@@ -352,11 +381,65 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       plane_pose_array.poses.push_back(planePose);
    }
 
-    detections_pub_.publish(tag_detection_array);
+
     pose_pub_.publish(tag_pose_array);
     plane_pose_pub_.publish(plane_pose_array);
     image_pub_.publish(cv_ptr->toImageMsg());
+
+    // go through all entries in the map and either publish or age and delete them
+
+    auto begin = trackedAprilTags_.begin();
+
+    for (begin; begin != trackedAprilTags_.end(); ++begin) {
+        if (begin->second->posesQueue_.size()==max_number_of_detection_instances_per_tag_) {
+            // we have valid number of poses
+            // compute, remove head, publish as needed
+
+            std::vector<double> angles_in_radians;
+            std::transform(begin->second->posesQueue_.begin(), begin->second->posesQueue_.end(), std::back_inserter(angles_in_radians),
+            [] (const AprilTagDetection &a) -> double {
+                tf::Quaternion rot_quaternion_a(a.pose.pose.orientation.x, a.pose.pose.orientation.y, a.pose.pose.orientation.z,a.pose.pose.orientation.w);
+                double roll, pitch, yaw;
+                tf::Matrix3x3(rot_quaternion_a).getRPY(roll, pitch, yaw);
+                return yaw;
+            });
+
+            //find maximum
+            auto min_and_max_elements = std::minmax_element(angles_in_radians.begin(), angles_in_radians.end());
+            //compute range
+
+            auto range = std::fabs(*min_and_max_elements.first - *min_and_max_elements.second);
+
+            if (range <= angles::from_degrees(tf_pose_acceptance_error_range_)) {
+                tf::Stamped<tf::Transform> tag_transform;
+                auto tag_detection = begin->second->posesQueue_.front();
+                auto tag_pose = begin->second->posesQueue_.front().pose;
+                auto description = begin->second->descriptionsQueue_.front();
+                tf::poseStampedMsgToTF(tag_pose, tag_transform);
+                tf_pub_.sendTransform(tf::StampedTransform(tag_transform, tag_transform.stamp_, tag_transform.frame_id_, description.frame_name()));
+                tag_detection_array.detections.push_back(tag_detection);
+            }
+
+
+            begin->second->posesQueue_.pop_front();
+            begin->second->descriptionsQueue_.pop_front();
+        }
+    }
+
+    // now clean all entries that are too old
+
+
+    for (auto it = tracked_april_tags_.begin(); it != tracked_april_tags_.end();) {
+      if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - it->second->lastUpdated_) > valid_detection_time_out_){
+          tracked_april_tags_.erase(it++);
+      } else {
+        it++;
+      }
+    }
+
+    detections_pub_.publish(tag_detection_array);
   }
+
 
 }
 
