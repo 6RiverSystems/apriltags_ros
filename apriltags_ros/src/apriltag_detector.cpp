@@ -111,7 +111,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   tf_pose_acceptance_error_range_ = std::max(0.0f, std::min(90.0f, tf_pose_acceptance_error_range_));
 
   pnh.param<int>("max_number_of_detection_instances_per_tag", max_number_of_detection_instances_per_tag_,5);
-  max_number_of_detection_instances_per_tag_= std::max(0.0, std::min(20, max_number_of_detection_instances_per_tag_));
+  max_number_of_detection_instances_per_tag_= std::max(0, std::min(20, max_number_of_detection_instances_per_tag_));
 
   int detection_time_out = 60;
   pnh.param<int>("valid_detection_time_out", detection_time_out, 60);
@@ -359,11 +359,11 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         tag_detection.size = tag_size;
         //tag_detection_array.detections.push_back(tag_detection);
 
-        if (trackedAprilTags_.find(detection.id) == trackedAprilTags_.end()) {
+        if (tracked_april_tags_.find(detection.id) == tracked_april_tags_.end()) {
           auto sp = std::make_shared<DetectionPosesQueueWrapper>();
-          trackedAprilTags_[detection.id] = sp;
+            tracked_april_tags_[detection.id] = sp;
         }
-        auto match = trackedAprilTags_[detection.id]; // we either have a match or we just created one
+        auto match = tracked_april_tags_[detection.id]; // we either have a match or we just created one
 
         match->posesQueue_.push_back(tag_detection);
         match->descriptionsQueue_.push_back(description);
@@ -388,9 +388,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
     // go through all entries in the map and either publish or age and delete them
 
-    auto begin = trackedAprilTags_.begin();
+    auto begin = tracked_april_tags_.begin();
 
-    for (begin; begin != trackedAprilTags_.end(); ++begin) {
+    for (begin; begin != tracked_april_tags_.end(); ++begin) {
         if (begin->second->posesQueue_.size()==max_number_of_detection_instances_per_tag_) {
             // we have valid number of poses
             // compute, remove head, publish as needed
