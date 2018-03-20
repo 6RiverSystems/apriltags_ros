@@ -15,6 +15,8 @@
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <chrono>
+#include <apriltags_ros/AprilTagDetection.h>
 
 namespace apriltags_ros{
 
@@ -32,6 +34,11 @@ class AprilTagDescription{
   std::string frame_name_;
 };
 
+struct DetectionPosesQueueWrapper {
+  std::deque<AprilTagDetection> posesQueue_;
+  std::deque<AprilTagDescription> descriptionsQueue_;
+  std::chrono::steady_clock::time_point lastUpdated_;
+};
 
 class AprilTagDetector{
  public:
@@ -85,6 +92,11 @@ class AprilTagDetector{
   float plane_inlier_threshold_;
   float plane_angle_threshold_;
   bool publish_plane_cloud_;
+
+  std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > tracked_april_tags_;
+  float tf_pose_acceptance_error_range_ = 0.0698132; //radians
+  int max_number_of_detection_instances_per_tag_ = 5;
+  std::chrono::seconds valid_detection_time_out_{15};
 
   tf::TransformListener tf_listener_;
   std::string output_frame_id_;
