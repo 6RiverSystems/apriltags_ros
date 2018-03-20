@@ -107,7 +107,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   plane_angle_threshold_ = std::max(0.0f, std::min(90.0f, plane_angle_threshold_));
 
 
-  pnh.param<float>("tf_pose_acceptance_error_range in radians", tf_pose_acceptance_error_range_, 4);
+  pnh.param<float>("tf_pose_acceptance_error_range_", tf_pose_acceptance_error_range_, 0.0698132);
   tf_pose_acceptance_error_range_ = std::max(0.0f, std::min(90.0f, tf_pose_acceptance_error_range_));
 
   pnh.param<int>("max_number_of_detection_instances_per_tag", max_number_of_detection_instances_per_tag_,5);
