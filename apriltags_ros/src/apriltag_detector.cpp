@@ -26,6 +26,8 @@
 #include <cmath>
 #include <Eigen/Core>
 #include <pcl_ros/transforms.h>
+#include <srslib_framework/ros/function/service_call/ServiceCallConfig.hpp>
+
 namespace apriltags_ros{
 
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
@@ -136,6 +138,13 @@ AprilTagDetector::~AprilTagDetector(){
 }
 
 void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
+  if (enabled_ != msg.data) {
+    int depth_exposure = (msg.data) ? 30 : 200;
+
+    std::string node = "/sensors/camera_front_forward/realsense_ros_camera";
+    srs::ServiceCallConfig<int>::set(node, "rs435_depth_exposure" , depth_exposure);
+    ROS_INFO("Change camera exposure in april_tag node to %d", depth_exposure);
+  }
   enabled_ = msg.data;
 
   ROS_INFO("April tag enabled: %d", enabled_);

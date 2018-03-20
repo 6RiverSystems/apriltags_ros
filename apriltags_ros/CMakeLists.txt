@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
   eigen_conversions
   std_msgs
   cmake_modules
+  srslib_framework
 )
 
 set(CMAKE_CXX_STANDARD 11)
@@ -44,7 +45,7 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES apriltag_detector
-  CATKIN_DEPENDS apriltags image_transport roscpp sensor_msgs geometry_msgs tf cv_bridge message_runtime nodelet std_msgs
+  CATKIN_DEPENDS apriltags image_transport roscpp sensor_msgs geometry_msgs tf cv_bridge message_runtime nodelet std_msgs srslib_framework
 )
 
 ###########
@@ -55,6 +56,7 @@ include_directories(include)
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${srslib_framework_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
 )
 
@@ -64,6 +66,7 @@ add_library(apriltag_detector
 target_link_libraries(apriltag_detector
   ${PCL_LIBRARIES}
   ${catkin_LIBRARIES}
+  ${srslib_framework_LIBRARIES}
 )
 add_dependencies(apriltag_detector
   ${catkin_EXPORTED_TARGETS}
