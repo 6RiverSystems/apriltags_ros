@@ -94,9 +94,9 @@ class AprilTagDetector{
   bool publish_plane_cloud_;
 
   std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > tracked_april_tags_;
-  float tf_pose_acceptance_error_range_ = 4; //degrees
+  float tf_pose_acceptance_error_range_ = 0.0698132; //radians
   int max_number_of_detection_instances_per_tag_ = 5;
-  std::chrono::seconds valid_detection_time_out_{60};
+  std::chrono::seconds valid_detection_time_out_{15};
 
   tf::TransformListener tf_listener_;
   std::string output_frame_id_;
