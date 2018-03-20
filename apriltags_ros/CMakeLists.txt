@@ -26,7 +26,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 set(CMAKE_CXX_STANDARD 11)
 
-find_package(PCL 1.8 REQUIRED QUIET)
+find_package(PCL 1.8 REQUIRED QUIET COMPONENTS io common segmentation)
 
 find_package(Eigen3)
 
