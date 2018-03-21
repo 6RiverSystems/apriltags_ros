@@ -159,7 +159,7 @@ AprilTagDetector::~AprilTagDetector(){
 void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
 
   // Temporary workaround for the D435 camera. Decrease exposure when detecting tags
-  if (use_d435_camera_ && enabled_ != msg.data) {
+  if (use_d435_camera_) {
     int depth_exposure = (msg.data) ? 30 : 200;
 
     std::string node = "/sensors/camera_front_forward/realsense_ros_camera";
