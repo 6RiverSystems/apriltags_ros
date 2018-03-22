@@ -120,6 +120,8 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   pnh.param<bool>("use_d435_camera", use_d435_camera_, false);
 
+  node_namespace_ = nh.getNamespace();
+
   pcl::console::setVerbosityLevel(pcl::console::L_ALWAYS);
 
   // Read parameters
@@ -162,7 +164,7 @@ void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
   if (use_d435_camera_) {
     int depth_exposure = (msg.data) ? 30 : 200;
 
-    std::string node = "/sensors/camera_front_forward/realsense_ros_camera";
+    std::string node = node_namespace_ + "/realsense_ros_camera";
     srs::ServiceCallConfig<int>::set(node, "rs435_depth_exposure" , depth_exposure);
     ROS_INFO("Change camera exposure in april_tag node to %d", depth_exposure);
   }

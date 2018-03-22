@@ -92,6 +92,7 @@ class AprilTagDetector{
   float plane_angle_threshold_;
   bool publish_plane_cloud_;
   bool use_d435_camera_;
+  std::string node_namespace_;
 
   std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > tracked_april_tags_;
   float tf_pose_acceptance_error_range_; //radians
