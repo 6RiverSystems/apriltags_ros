@@ -85,18 +85,19 @@ class AprilTagDetector{
   boost::shared_ptr<AprilTags::TagDetector> tag_detector_;
   bool projected_optics_;
   bool enabled_;
-  bool same_frame_id_;
   int decimate_count_;
   int decimate_rate_;
   float plane_model_distance_threshold_;
   float plane_inlier_threshold_;
   float plane_angle_threshold_;
   bool publish_plane_cloud_;
+  bool use_d435_camera_;
+  std::string node_namespace_;
 
   std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > tracked_april_tags_;
-  float tf_pose_acceptance_error_range_ = 0.0698132; //radians
-  int max_number_of_detection_instances_per_tag_ = 5;
-  std::chrono::seconds valid_detection_time_out_{15};
+  float tf_pose_acceptance_error_range_; //radians
+  int max_number_of_detection_instances_per_tag_;
+  std::chrono::seconds valid_detection_time_out_;
 
   tf::TransformListener tf_listener_;
   std::string output_frame_id_;

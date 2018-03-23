@@ -26,6 +26,7 @@
 #include <cmath>
 #include <Eigen/Core>
 #include <pcl_ros/transforms.h>
+#include <srslib_framework/ros/function/service_call/ServiceCallConfig.hpp>
 #include <deque>
 #include <chrono>
 #include <algorithm>
@@ -33,18 +34,19 @@
 
 namespace apriltags_ros{
 
-
-
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   it_(nh),
   enabled_(true),
-  same_frame_id_(true),
   decimate_rate_(3),
   decimate_count_(0),
   plane_model_distance_threshold_(0.01),
   plane_inlier_threshold_(0.7f),
   plane_angle_threshold_(0.0872665f),
-  publish_plane_cloud_(false)
+  publish_plane_cloud_(false),
+  tf_pose_acceptance_error_range_(0.0698132f),
+  max_number_of_detection_instances_per_tag_(5),
+  valid_detection_time_out_(15),
+  use_d435_camera_(false)
 {
   XmlRpc::XmlRpcValue april_tag_descriptions;
   if(!pnh.getParam("tag_descriptions", april_tag_descriptions)){
@@ -103,19 +105,22 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   pnh.param<float>("plane_inlier_threshold", plane_inlier_threshold_, 0.7f);
   plane_inlier_threshold_ = std::max(0.0f, std::min(1.0f, plane_inlier_threshold_));
 
-  pnh.param<float>("plane_angle_threshold", plane_angle_threshold_,0.0872665f);
+  pnh.param<float>("plane_angle_threshold", plane_angle_threshold_, 0.0872665f);
   plane_angle_threshold_ = std::max(0.0f, std::min(90.0f, plane_angle_threshold_));
-
 
   pnh.param<float>("tf_pose_acceptance_error_range_", tf_pose_acceptance_error_range_, 0.0698132);
   tf_pose_acceptance_error_range_ = std::max(0.0f, std::min(90.0f, tf_pose_acceptance_error_range_));
 
-  pnh.param<int>("max_number_of_detection_instances_per_tag", max_number_of_detection_instances_per_tag_,5);
+  pnh.param<int>("max_number_of_detection_instances_per_tag", max_number_of_detection_instances_per_tag_, 5);
   max_number_of_detection_instances_per_tag_= std::max(0, std::min(20, max_number_of_detection_instances_per_tag_));
 
   int detection_time_out = 15;
   pnh.param<int>("valid_detection_time_out", detection_time_out, 15);
   valid_detection_time_out_ = chrono::seconds(std::max(0, std::min(180, detection_time_out)));
+
+  pnh.param<bool>("use_d435_camera", use_d435_camera_, false);
+
+  node_namespace_ = nh.getNamespace();
 
   pcl::console::setVerbosityLevel(pcl::console::L_ALWAYS);
 
@@ -154,6 +159,15 @@ AprilTagDetector::~AprilTagDetector(){
 }
 
 void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
+
+  // Temporary workaround for the D435 camera. Decrease exposure when detecting tags
+  if (use_d435_camera_) {
+    int depth_exposure = (msg.data) ? 30 : 200;
+
+    std::string node = node_namespace_ + "/realsense_ros_camera";
+    srs::ServiceCallConfig<int>::set(node, "rs435_depth_exposure" , depth_exposure);
+    ROS_INFO("Change camera exposure in april_tag node to %d", depth_exposure);
+  }
   enabled_ = msg.data;
 
   ROS_INFO("April tag enabled: %d", enabled_);
@@ -183,7 +197,6 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     {
       ROS_DEBUG_THROTTLE(5, "Pointcloud frame id [%s] doesn't match RGB image frame id [%s]",
         cloud->header.frame_id.c_str(), rgb_msg_in->header.frame_id.c_str());
-      same_frame_id_ = false;
     }
 
     cv_bridge::CvImagePtr cv_ptr;
@@ -368,27 +381,18 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         match->posesQueue_.push_back(tag_detection);
         match->descriptionsQueue_.push_back(description);
         match->lastUpdated_ = std::chrono::steady_clock::now();
-
-
-
       }
 
-
-
       // Publish both poses either way to debug/visualise
-
       tag_pose_array.poses.push_back(tag_pose.pose);
       plane_pose_array.poses.push_back(planePose);
    }
-
 
     pose_pub_.publish(tag_pose_array);
     plane_pose_pub_.publish(plane_pose_array);
     image_pub_.publish(cv_ptr->toImageMsg());
 
     // go through all entries in the map and either publish or age and delete them
-
-
     for (auto begin = tracked_april_tags_.begin(); begin != tracked_april_tags_.end(); ++begin) {
       if (begin->second->posesQueue_.size()==max_number_of_detection_instances_per_tag_) {
         // we have valid number of poses
@@ -417,15 +421,12 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
           tag_detection_array.detections.push_back(tag_detection);
         }
 
-
         begin->second->posesQueue_.pop_front();
         begin->second->descriptionsQueue_.pop_front();
       }
     }
 
     // now clean all entries that are too old
-
-
     for (auto it = tracked_april_tags_.begin(); it != tracked_april_tags_.end();) {
       if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - it->second->lastUpdated_) > valid_detection_time_out_){
         tracked_april_tags_.erase(it++);
