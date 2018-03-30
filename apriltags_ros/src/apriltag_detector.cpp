@@ -449,16 +449,16 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
     ROS_ASSERT(tag_description.getType() == XmlRpc::XmlRpcValue::TypeStruct);
 
     std::vector<int> ids;
-    if (tag_description.find("id_range") != tag_description.end()) {
+    if (tag_description.hasMember("id_range")) {
       ROS_ASSERT(tag_description["id_range"].getType() == XmlRpc::XmlRpcValue::TypeString);
       std::string range = (std::string)tag_description["id_range"];
       // Parse out the id range.
       size_t dashIdx = range.find("-");
       ROS_ASSERT(dashIdx < range.size());
-      std::stringstream start(0, dashIdx);
+      std::stringstream start(range.substr(0, dashIdx));
       int start_id = 0;
       start >> start_id;
-      std::stringstream end(range.sub(dashIdx + 1));
+      std::stringstream end(range.substr(dashIdx + 1));
       int end_id = 0;
       start >> end_id;
 
@@ -474,18 +474,17 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
 
     double size = (double)tag_description["size"];
 
-
-    std::string frame_name;
-    if(tag_description.hasMember("frame_id")){
-      ROS_ASSERT(tag_description["frame_id"].getType() == XmlRpc::XmlRpcValue::TypeString);
-      frame_name = (std::string)tag_description["frame_id"];
-    }
-    else{
-      std::stringstream frame_name_stream;
-      frame_name_stream << "tag_" << id;
-      frame_name = frame_name_stream.str();
-    }
     for (int id : ids) {
+      std::string frame_name;
+      if(tag_description.hasMember("frame_id")){
+        ROS_ASSERT(tag_description["frame_id"].getType() == XmlRpc::XmlRpcValue::TypeString);
+        frame_name = (std::string)tag_description["frame_id"];
+      }
+      else{
+        std::stringstream frame_name_stream;
+        frame_name_stream << "tag_" << id;
+        frame_name = frame_name_stream.str();
+      }
       AprilTagDescription description(id, size, frame_name);
       ROS_INFO_STREAM("Loaded tag config: "<<id<<", size: "<<size<<", frame_name: "<<frame_name);
       descriptions.insert(std::make_pair(id, description));
