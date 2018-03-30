@@ -460,7 +460,7 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
       start >> start_id;
       std::stringstream end(range.substr(dashIdx + 1));
       int end_id = 0;
-      start >> end_id;
+      end >> end_id;
 
       for (int k = start_id; k <= end_id; ++k) {
         ids.push_back(k);
