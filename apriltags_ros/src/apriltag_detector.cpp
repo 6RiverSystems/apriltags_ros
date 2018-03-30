@@ -476,11 +476,10 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
 
     for (int id : ids) {
       std::string frame_name;
-      if(tag_description.hasMember("frame_id")){
+      if (tag_description.hasMember("frame_id")) {
         ROS_ASSERT(tag_description["frame_id"].getType() == XmlRpc::XmlRpcValue::TypeString);
         frame_name = (std::string)tag_description["frame_id"];
-      }
-      else{
+      } else {
         std::stringstream frame_name_stream;
         frame_name_stream << "tag_" << id;
         frame_name = frame_name_stream.str();
