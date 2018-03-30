@@ -447,25 +447,47 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
   for (int32_t i = 0; i < tag_descriptions.size(); ++i) {
     XmlRpc::XmlRpcValue& tag_description = tag_descriptions[i];
     ROS_ASSERT(tag_description.getType() == XmlRpc::XmlRpcValue::TypeStruct);
-    ROS_ASSERT(tag_description["id"].getType() == XmlRpc::XmlRpcValue::TypeInt);
+
+    std::vector<int> ids;
+    if (tag_description.hasMember("id_range")) {
+      ROS_ASSERT(tag_description["id_range"].getType() == XmlRpc::XmlRpcValue::TypeString);
+      std::string range = (std::string)tag_description["id_range"];
+      // Parse out the id range.
+      size_t dashIdx = range.find("-");
+      ROS_ASSERT(dashIdx < range.size());
+      std::stringstream start(range.substr(0, dashIdx));
+      int start_id = 0;
+      start >> start_id;
+      std::stringstream end(range.substr(dashIdx + 1));
+      int end_id = 0;
+      end >> end_id;
+
+      for (int k = start_id; k <= end_id; ++k) {
+        ids.push_back(k);
+      }
+    } else {
+      ROS_ASSERT(tag_description["id"].getType() == XmlRpc::XmlRpcValue::TypeInt);
+      ids.push_back((int)tag_description["id"]);
+    }
+
     ROS_ASSERT(tag_description["size"].getType() == XmlRpc::XmlRpcValue::TypeDouble);
 
-    int id = (int)tag_description["id"];
     double size = (double)tag_description["size"];
 
-    std::string frame_name;
-    if(tag_description.hasMember("frame_id")){
-      ROS_ASSERT(tag_description["frame_id"].getType() == XmlRpc::XmlRpcValue::TypeString);
-      frame_name = (std::string)tag_description["frame_id"];
+    for (int id : ids) {
+      std::string frame_name;
+      if (tag_description.hasMember("frame_id")) {
+        ROS_ASSERT(tag_description["frame_id"].getType() == XmlRpc::XmlRpcValue::TypeString);
+        frame_name = (std::string)tag_description["frame_id"];
+      } else {
+        std::stringstream frame_name_stream;
+        frame_name_stream << "tag_" << id;
+        frame_name = frame_name_stream.str();
+      }
+      AprilTagDescription description(id, size, frame_name);
+      ROS_INFO_STREAM("Loaded tag config: "<<id<<", size: "<<size<<", frame_name: "<<frame_name);
+      descriptions.insert(std::make_pair(id, description));
     }
-    else{
-      std::stringstream frame_name_stream;
-      frame_name_stream << "tag_" << id;
-      frame_name = frame_name_stream.str();
-    }
-    AprilTagDescription description(id, size, frame_name);
-    ROS_INFO_STREAM("Loaded tag config: "<<id<<", size: "<<size<<", frame_name: "<<frame_name);
-    descriptions.insert(std::make_pair(id, description));
   }
   return descriptions;
 }
