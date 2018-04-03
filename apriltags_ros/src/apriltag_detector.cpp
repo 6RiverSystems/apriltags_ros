@@ -165,9 +165,11 @@ void AprilTagDetector::enableCb(const std_msgs::Int8& msg) {
     srs::ServiceCallConfig<int>::set(node, "rs435_depth_exposure" , depth_exposure);
     ROS_INFO("Change camera exposure in april_tag node to %d", depth_exposure);
   }
-  number_of_frames_to_capture_ = msg.data;
-
-  ROS_INFO("April tag enabled: %d", number_of_frames_to_capture_);
+  if (number_of_frames_to_capture_ == 0 && msg.data > 0) {
+      tracked_april_tags_.clear();
+  }
+  number_of_frames_to_capture_ = msg.data >= 0 ? msg.data : 0;
+  ROS_INFO("April tag enabled (value > 0): %d", number_of_frames_to_capture_);
 }
 
 double absoluteAngleDiff(double angleA, double angleB)
