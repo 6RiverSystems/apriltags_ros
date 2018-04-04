@@ -36,7 +36,7 @@ namespace apriltags_ros{
 
 AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   it_(nh),
-  enabled_(true),
+  number_of_frames_to_capture_(1),
   decimate_rate_(3),
   decimate_count_(0),
   plane_model_distance_threshold_(0.01),
@@ -94,7 +94,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
     tag_codes = &AprilTags::tagCodes36h11;
   }
 
-  pnh.param<bool>("start_enabled", enabled_, false);
+  pnh.param<int>("start_enabled", number_of_frames_to_capture_, 0);
 
   pnh.param<int>("decimate_rate", decimate_rate_, 3);
 
@@ -111,9 +111,6 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   pnh.param<float>("tf_pose_acceptance_error_range_", tf_pose_acceptance_error_range_, 0.0698132);
   tf_pose_acceptance_error_range_ = std::max(0.0f, std::min(90.0f, tf_pose_acceptance_error_range_));
 
-  pnh.param<int>("max_number_of_detection_instances_per_tag", max_number_of_detection_instances_per_tag_, 5);
-  max_number_of_detection_instances_per_tag_= std::max(0, std::min(20, max_number_of_detection_instances_per_tag_));
-
   int detection_time_out = 15;
   pnh.param<int>("valid_detection_time_out", detection_time_out, 15);
   valid_detection_time_out_ = chrono::seconds(std::max(0, std::min(180, detection_time_out)));
@@ -129,7 +126,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   pnh.param("queue_size", queue_size, 100);
 
   ROS_INFO("April tag info: start_enabled: %d, publish_plane_cloud: %d, plane_inlier_threshold: %f",
-    enabled_,
+    number_of_frames_to_capture_,
     publish_plane_cloud_,
     plane_inlier_threshold_);
 
@@ -158,7 +155,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 AprilTagDetector::~AprilTagDetector(){
 }
 
-void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
+void AprilTagDetector::enableCb(const std_msgs::Int8& msg) {
 
   // Temporary workaround for the D435 camera. Decrease exposure when detecting tags
   if (use_d435_camera_) {
@@ -168,9 +165,11 @@ void AprilTagDetector::enableCb(const std_msgs::Bool& msg) {
     srs::ServiceCallConfig<int>::set(node, "rs435_depth_exposure" , depth_exposure);
     ROS_INFO("Change camera exposure in april_tag node to %d", depth_exposure);
   }
-  enabled_ = msg.data;
-
-  ROS_INFO("April tag enabled: %d", enabled_);
+  if (number_of_frames_to_capture_ == 0 && msg.data > 0) {
+      tracked_april_tags_.clear();
+  }
+  number_of_frames_to_capture_ = msg.data >= 0 ? msg.data : 0;
+  ROS_INFO("April tag enabled (value > 0): %d", number_of_frames_to_capture_);
 }
 
 double absoluteAngleDiff(double angleA, double angleB)
@@ -183,7 +182,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
   const sensor_msgs::CameraInfoConstPtr& rgb_cam_info, const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
 
   // Check for trigger / timing
-  if (!enabled_) {
+  if (!number_of_frames_to_capture_) {
     ROS_DEBUG_THROTTLE(5.0, "April images received but not enabled.");
     return;
   }
@@ -394,7 +393,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
     // go through all entries in the map and either publish or age and delete them
     for (auto begin = tracked_april_tags_.begin(); begin != tracked_april_tags_.end(); ++begin) {
-      if (begin->second->posesQueue_.size()==max_number_of_detection_instances_per_tag_) {
+      if (begin->second->posesQueue_.size()==number_of_frames_to_capture_) {
         // we have valid number of poses
         // compute, remove head, publish as needed
 

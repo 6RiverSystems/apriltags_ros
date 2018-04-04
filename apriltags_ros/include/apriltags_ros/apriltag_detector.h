@@ -2,7 +2,7 @@
 #define APRILTAG_DETECTOR_H
 
 #include <ros/ros.h>
-#include <std_msgs/Bool.h>
+#include <std_msgs/Int8.h>
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
 #include <message_filters/subscriber.h>
@@ -45,7 +45,7 @@ class AprilTagDetector{
   AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh);
   ~AprilTagDetector();
  private:
-  void enableCb(const std_msgs::Bool& msg);
+  void enableCb(const std_msgs::Int8& msg);
   void imageCb(const sensor_msgs::PointCloud2ConstPtr& depth_msg, const sensor_msgs::ImageConstPtr& rgb_msg_in,
 		const sensor_msgs::CameraInfoConstPtr& rgb_info_msg, const sensor_msgs::CameraInfoConstPtr& depth_cam_info);
   std::map<int, AprilTagDescription> parse_tag_descriptions(XmlRpc::XmlRpcValue& april_tag_descriptions);
@@ -84,7 +84,7 @@ class AprilTagDetector{
   tf::TransformBroadcaster tf_pub_;
   boost::shared_ptr<AprilTags::TagDetector> tag_detector_;
   bool projected_optics_;
-  bool enabled_;
+  int number_of_frames_to_capture_;
   int decimate_count_;
   int decimate_rate_;
   float plane_model_distance_threshold_;
