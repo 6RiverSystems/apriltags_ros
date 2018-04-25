@@ -161,7 +161,7 @@ void AprilTagDetector::enableCb(const std_msgs::Int8& msg) {
   if (use_d435_camera_) {
     int depth_exposure = (msg.data) ? 30 : 200;
 
-    std::string node = node_namespace_ + "/realsense_ros_camera";
+    std::string node = node_namespace_ + "/realsense2_camera";
     srs::ServiceCallConfig<int>::set(node, "rs435_depth_exposure" , depth_exposure);
     ROS_INFO("Change camera exposure in april_tag node to %d", depth_exposure);
   }
