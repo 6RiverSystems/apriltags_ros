@@ -484,7 +484,7 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
         frame_name = frame_name_stream.str();
       }
       AprilTagDescription description(id, size, frame_name);
-      ROS_INFO_STREAM("Loaded tag config: "<<id<<", size: "<<size<<", frame_name: "<<frame_name);
+      //ROS_INFO_STREAM("Loaded tag config: "<<id<<", size: "<<size<<", frame_name: "<<frame_name);
       descriptions.insert(std::make_pair(id, description));
     }
   }
