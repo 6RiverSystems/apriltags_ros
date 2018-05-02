@@ -26,7 +26,6 @@
 #include <cmath>
 #include <Eigen/Core>
 #include <pcl_ros/transforms.h>
-#include <srslib_framework/ros/function/service_call/ServiceCallConfig.hpp>
 #include <deque>
 #include <chrono>
 #include <algorithm>
@@ -45,10 +44,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   publish_plane_cloud_(false),
   tf_pose_acceptance_error_range_(0.0698132f),
   max_number_of_detection_instances_per_tag_(5),
-  valid_detection_time_out_(15),
-  use_d435_camera_(false),
-  d435_default_exposure_(0),
-  d435_detection_exposure_(0)
+  valid_detection_time_out_(15)
 {
   XmlRpc::XmlRpcValue april_tag_descriptions;
   if(!pnh.getParam("tag_descriptions", april_tag_descriptions)){
@@ -117,13 +113,6 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   pnh.param<int>("valid_detection_time_out", detection_time_out, 15);
   valid_detection_time_out_ = chrono::seconds(std::max(0, std::min(180, detection_time_out)));
 
-  // TODO: move to executive to change exposure based on robot behavior
-  pnh.param<bool>("use_d435_camera", use_d435_camera_, false);
-  pnh.param<int>("d435_detection_exposure", d435_detection_exposure_, 30);
-  pnh.param<int>("d435_default_exposure", d435_default_exposure_, 425);
-
-  node_namespace_ = nh.getNamespace();
-
   pcl::console::setVerbosityLevel(pcl::console::L_ALWAYS);
 
   // Read parameters
@@ -162,14 +151,6 @@ AprilTagDetector::~AprilTagDetector(){
 
 void AprilTagDetector::enableCb(const std_msgs::Int8& msg) {
 
-  // Temporary workaround for the D435 camera. Decrease exposure when detecting tags
-  if (use_d435_camera_) {
-    int depth_exposure = (msg.data) ? d435_detection_exposure_ : d435_default_exposure_;
-
-    std::string node = node_namespace_ + "/realsense2_camera";
-    srs::ServiceCallConfig<int>::set(node, "rs435_depth_exposure" , depth_exposure);
-    ROS_INFO("Change camera exposure in april_tag node to %d", depth_exposure);
-  }
   if (number_of_frames_to_capture_ == 0 && msg.data > 0) {
       tracked_april_tags_.clear();
   }
