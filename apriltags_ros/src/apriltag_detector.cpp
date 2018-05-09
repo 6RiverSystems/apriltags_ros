@@ -355,7 +355,6 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         tag_detection.pose = tag_pose;
         tag_detection.id = detection.id;
         tag_detection.size = tag_size;
-        //tag_detection_array.detections.push_back(tag_detection);
 
         if (tracked_april_tags_.find(detection.id) == tracked_april_tags_.end()) {
           auto sp = std::make_shared<DetectionPosesQueueWrapper>();
@@ -470,7 +469,7 @@ std::map<int, AprilTagDescription> AprilTagDetector::parse_tag_descriptions(XmlR
         frame_name = frame_name_stream.str();
       }
       AprilTagDescription description(id, size, frame_name);
-      //ROS_INFO_STREAM("Loaded tag config: "<<id<<", size: "<<size<<", frame_name: "<<frame_name);
+      ROS_DEBUG_STREAM("Loaded tag config: "<<id<<", size: "<<size<<", frame_name: "<<frame_name);
       descriptions.insert(std::make_pair(id, description));
     }
   }
