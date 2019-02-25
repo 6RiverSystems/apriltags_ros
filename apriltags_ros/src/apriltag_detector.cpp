@@ -14,7 +14,6 @@
 #include <XmlRpcException.h>
 #include <std_msgs/Header.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
-#include <depth_image_proc/depth_traits.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <opencv2/opencv.hpp>
