@@ -139,8 +139,8 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
 
   image_pub_ = it_.advertise("tag_detections_image", 1);
   plane_cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("plane_cloud", 1);
-
-  detections_pub_ = nh.advertise<AprilTagDetectionArray>("tag_detections", 1);
+  all_detections_pub_ = nh.advertise<AprilTagDetectionArray>("all_tag_detections", 1);
+  valid_detections_pub_ = nh.advertise<AprilTagDetectionArray>("tag_detections", 1);
   pose_pub_ = nh.advertise<geometry_msgs::PoseArray>("tag_detections_pose", 1);
   plane_pose_pub_ = nh.advertise<geometry_msgs::PoseArray>("plane_poses", 1);
 }
@@ -151,7 +151,7 @@ AprilTagDetector::~AprilTagDetector(){
 void AprilTagDetector::enableCb(const std_msgs::Int8& msg) {
 
   if (number_of_frames_to_capture_ == 0 && msg.data > 0) {
-      tracked_april_tags_.clear();
+      tracked_april_tags_with_valid_pose_.clear();
   }
   number_of_frames_to_capture_ = msg.data >= 0 ? msg.data : 0;
   ROS_INFO("April tag enabled (value > 0): %d", number_of_frames_to_capture_);
@@ -233,7 +233,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       }
     }
 
-    AprilTagDetectionArray tag_detection_array;
+    AprilTagDetectionArray valid_pose_tag_detection_array;
+    AprilTagDetectionArray all_tag_detection_array;
+
     geometry_msgs::PoseArray tag_pose_array;
     tag_pose_array.header = header;
     geometry_msgs::PoseArray plane_pose_array;
@@ -261,15 +263,15 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       Eigen::Quaternion<double> rot_quaternion = Eigen::Quaternion<double>(rot);
       rot_quaternion.normalize();
 
-      geometry_msgs::Pose pose;
-      pose.position.x = transform(0, 3);
-      pose.position.y = transform(1, 3);
-      pose.position.z = transform(2, 3);
+      geometry_msgs::Pose april_tag_raw_pose;
+      april_tag_raw_pose.position.x = transform(0, 3);
+      april_tag_raw_pose.position.y = transform(1, 3);
+      april_tag_raw_pose.position.z = transform(2, 3);
 
-      pose.orientation.x = rot_quaternion.x();
-      pose.orientation.y = rot_quaternion.y();
-      pose.orientation.z = rot_quaternion.z();
-      pose.orientation.w = rot_quaternion.w();
+      april_tag_raw_pose.orientation.x = rot_quaternion.x();
+      april_tag_raw_pose.orientation.y = rot_quaternion.y();
+      april_tag_raw_pose.orientation.z = rot_quaternion.z();
+      april_tag_raw_pose.orientation.w = rot_quaternion.w();
 
       // Align the x axis to the detected plane for the purposes of alignment and visualization
       tf::Vector3 xAxis(rot(0,0), rot(1,0), rot(2,0));
@@ -306,7 +308,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       tf::poseTFToMsg(planeTransform, planePose);
 
       // Align the origin of the detected plane with the position of the april tag detection
-      planePose.position = pose.position;
+      planePose.position = april_tag_raw_pose.position;
 
       if (transform_output) {
 
@@ -320,7 +322,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
           output_transform.getRotation().getY(),
           output_transform.getRotation().getZ(),
           output_transform.getRotation().getW());
-        tf::poseMsgToTF(pose, untransformedPose);
+        tf::poseMsgToTF(april_tag_raw_pose, untransformedPose);
         tf::poseMsgToTF(planePose, untransformedPlanePose);
         ROS_DEBUG("Untransformed: %f, %f, %f ... %f, %f, %f, %f",
           untransformedPose.getOrigin().getX(),
@@ -340,31 +342,46 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
           transformedPose.getRotation().getY(),
           transformedPose.getRotation().getZ(),
           transformedPose.getRotation().getW());
-        tf::poseTFToMsg(transformedPose, pose);
+        tf::poseTFToMsg(transformedPose, april_tag_raw_pose);
         tf::poseTFToMsg(transformedPlanePose, planePose);
       }
 
       geometry_msgs::PoseStamped tag_pose;
-      tag_pose.pose = pose;
+      tag_pose.pose = april_tag_raw_pose;
       tag_pose.header = header;
 
+      AprilTagDetection tag_detection;
+      tag_detection.pose = tag_pose;
+      tag_detection.id = detection.id;
+      tag_detection.size = tag_size;
+      
       if (validPose)
       {
-        AprilTagDetection tag_detection;
-        tag_detection.pose = tag_pose;
-        tag_detection.id = detection.id;
-        tag_detection.size = tag_size;
-
-        if (tracked_april_tags_.find(detection.id) == tracked_april_tags_.end()) {
+        if (tracked_april_tags_with_valid_pose_.find(detection.id) == tracked_april_tags_with_valid_pose_.end()) {
           auto sp = std::make_shared<DetectionPosesQueueWrapper>();
-            tracked_april_tags_[detection.id] = sp;
+            tracked_april_tags_with_valid_pose_[detection.id] = sp;
         }
-        auto match = tracked_april_tags_[detection.id]; // we either have a match or we just created one
+        auto match = tracked_april_tags_with_valid_pose_[detection.id]; // we either have a match or we just created one
 
         match->posesQueue_.push_back(tag_detection);
         match->descriptionsQueue_.push_back(description);
         match->lastUpdated_ = std::chrono::steady_clock::now();
       }
+
+      // Publish all tags for camera validation tests
+      if (all_tracked_april_tags_.find(detection.id) == all_tracked_april_tags_.end()) {
+        auto sp = std::make_shared<DetectionPosesQueueWrapper>();
+          all_tracked_april_tags_[detection.id] = sp;
+      }
+      auto match = all_tracked_april_tags_[detection.id]; // we either have a match or we just created one
+      if (match->posesQueue_.empty()) {
+        match->posesQueue_.push_back(tag_detection);
+        match->descriptionsQueue_.push_back(description);
+      } else {
+        match->posesQueue_[0]=tag_detection;
+        match->descriptionsQueue_[0]=description;
+      }
+      match->lastUpdated_ = std::chrono::steady_clock::now();
 
       // Publish both poses either way to debug/visualise
       tag_pose_array.poses.push_back(tag_pose.pose);
@@ -376,7 +393,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
     image_pub_.publish(cv_ptr->toImageMsg());
 
     // go through all entries in the map and either publish or age and delete them
-    for (auto begin = tracked_april_tags_.begin(); begin != tracked_april_tags_.end(); ++begin) {
+    for (auto begin = tracked_april_tags_with_valid_pose_.begin(); begin != tracked_april_tags_with_valid_pose_.end(); ++begin) {
       if (begin->second->posesQueue_.size()==number_of_frames_to_capture_) {
         // we have valid number of poses
         // compute, remove head, publish as needed
@@ -401,7 +418,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
           auto description = begin->second->descriptionsQueue_.front();
           tf::poseStampedMsgToTF(tag_pose, tag_transform);
           tf_pub_.sendTransform(tf::StampedTransform(tag_transform, tag_transform.stamp_, tag_transform.frame_id_, description.frame_name()));
-          tag_detection_array.detections.push_back(tag_detection);
+          valid_pose_tag_detection_array.detections.push_back(tag_detection);
         }
 
         begin->second->posesQueue_.pop_front();
@@ -409,16 +426,31 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       }
     }
 
+    for (auto && tag_detection : all_tracked_april_tags_) {
+      auto tag = tag_detection.second->posesQueue_[0];
+      all_tag_detection_array.detections.push_back(tag);
+    }
+
     // now clean all entries that are too old
-    for (auto it = tracked_april_tags_.begin(); it != tracked_april_tags_.end();) {
+    for (auto it = tracked_april_tags_with_valid_pose_.begin(); it != tracked_april_tags_with_valid_pose_.end();) {
       if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - it->second->lastUpdated_) > valid_detection_time_out_){
-        tracked_april_tags_.erase(it++);
+        tracked_april_tags_with_valid_pose_.erase(it++);
       } else {
         it++;
       }
     }
 
-    detections_pub_.publish(tag_detection_array);
+  for (auto it = all_tracked_april_tags_.begin(); it != all_tracked_april_tags_.end();) {
+      if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - it->second->lastUpdated_) > valid_detection_time_out_){
+        all_tracked_april_tags_.erase(it++);
+      } else {
+        it++;
+      }
+    }
+
+    valid_detections_pub_.publish(valid_pose_tag_detection_array);
+    all_detections_pub_.publish(all_tag_detection_array);
+
   }
 
 

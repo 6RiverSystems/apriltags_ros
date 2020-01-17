@@ -76,7 +76,8 @@ class AprilTagDetector{
 
   image_transport::Publisher image_pub_;
   ros::Publisher plane_cloud_pub_;
-  ros::Publisher detections_pub_;
+  ros::Publisher all_detections_pub_;
+  ros::Publisher valid_detections_pub_;
   ros::Publisher pose_pub_;
   ros::Publisher plane_pose_pub_;
 
@@ -92,7 +93,9 @@ class AprilTagDetector{
   float plane_angle_threshold_;
   bool publish_plane_cloud_;
 
-  std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > tracked_april_tags_;
+  std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > tracked_april_tags_with_valid_pose_;
+  std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > all_tracked_april_tags_;
+
   float tf_pose_acceptance_error_range_; //radians
   int max_number_of_detection_instances_per_tag_;
   std::chrono::seconds valid_detection_time_out_;
