@@ -296,11 +296,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       if ((diffRoll > plane_angle_threshold_) || (diffPitch > plane_angle_threshold_))
       {
         ROS_DEBUG_THROTTLE(5.0, "April tag and plane poses do not match!");
-
         ROS_DEBUG_THROTTLE(5.0, "April angle: %f, %f", aprilTagRoll, aprilTagPitch);
         ROS_DEBUG_THROTTLE(5.0, "Plane angle: %f, %f", planeRoll, planePitch);
         ROS_DEBUG_THROTTLE(5.0, "Diff: %f, %f", diffRoll, diffPitch);
-
         validPose = false;
       }
 
@@ -311,7 +309,6 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       planePose.position = april_tag_raw_pose.position;
 
       if (transform_output) {
-
         tf::Transform untransformedPose;
         tf::Transform untransformedPlanePose;
         ROS_DEBUG("output transformer: %f, %f, %f ... %f, %f, %f, %f",
@@ -358,8 +355,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       if (validPose)
       {
         if (tracked_april_tags_with_valid_pose_.find(detection.id) == tracked_april_tags_with_valid_pose_.end()) {
-          auto sp = std::make_shared<DetectionPosesQueueWrapper>();
-            tracked_april_tags_with_valid_pose_[detection.id] = sp;
+          tracked_april_tags_with_valid_pose_[detection.id] = std::make_shared<DetectionPosesQueueWrapper>();
         }
         auto match = tracked_april_tags_with_valid_pose_[detection.id]; // we either have a match or we just created one
 
@@ -370,8 +366,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
       // Publish all tags for camera validation tests
       if (all_tracked_april_tags_.find(detection.id) == all_tracked_april_tags_.end()) {
-        auto sp = std::make_shared<DetectionPosesQueueWrapper>();
-          all_tracked_april_tags_[detection.id] = sp;
+        all_tracked_april_tags_[detection.id] = std::make_shared<DetectionPosesQueueWrapper>();
       }
       auto match = all_tracked_april_tags_[detection.id]; // we either have a match or we just created one
       if (match->posesQueue_.empty()) {
