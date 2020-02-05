@@ -365,18 +365,8 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       }
 
       // Publish all tags for camera validation tests
-      if (all_tracked_april_tags_.find(detection.id) == all_tracked_april_tags_.end()) {
-        all_tracked_april_tags_[detection.id] = std::make_shared<DetectionPosesQueueWrapper>();
-      }
-      auto match = all_tracked_april_tags_[detection.id]; // we either have a match or we just created one
-      if (match->posesQueue_.empty()) {
-        match->posesQueue_.push_back(tag_detection);
-        match->descriptionsQueue_.push_back(description);
-      } else {
-        match->posesQueue_[0]=tag_detection;
-        match->descriptionsQueue_[0]=description;
-      }
-      match->lastUpdated_ = std::chrono::steady_clock::now();
+
+      all_tag_detection_array.detections.push_back(tag_detection);
 
       // Publish both poses either way to debug/visualise
       tag_pose_array.poses.push_back(tag_pose.pose);
@@ -421,23 +411,11 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       }
     }
 
-    for (auto && tag_detection : all_tracked_april_tags_) {
-      auto tag = tag_detection.second->posesQueue_[0];
-      all_tag_detection_array.detections.push_back(tag);
-    }
-
+    
     // now clean all entries that are too old
     for (auto it = tracked_april_tags_with_valid_pose_.begin(); it != tracked_april_tags_with_valid_pose_.end();) {
       if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - it->second->lastUpdated_) > valid_detection_time_out_){
         tracked_april_tags_with_valid_pose_.erase(it++);
-      } else {
-        it++;
-      }
-    }
-
-  for (auto it = all_tracked_april_tags_.begin(); it != all_tracked_april_tags_.end();) {
-      if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - it->second->lastUpdated_) > valid_detection_time_out_){
-        all_tracked_april_tags_.erase(it++);
       } else {
         it++;
       }
