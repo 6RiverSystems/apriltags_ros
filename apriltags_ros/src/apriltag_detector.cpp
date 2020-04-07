@@ -293,7 +293,7 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       bool validPose = true;
 
       // The maximum allowed angle delta for each axis
-      if ((diffRoll > plane_angle_threshold_) || (diffPitch > plane_angle_threshold_))
+      if (number_of_frames_to_capture_ == 1 && (diffRoll > plane_angle_threshold_) || (diffPitch > plane_angle_threshold_))
       {
         ROS_DEBUG_THROTTLE(5.0, "April tag and plane poses do not match!");
         ROS_DEBUG_THROTTLE(5.0, "April angle: %f, %f", aprilTagRoll, aprilTagPitch);
