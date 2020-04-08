@@ -16,7 +16,11 @@
 #include <tf/transform_listener.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <chrono>
+#include <apriltags_ros/AprilTagProfile.h>
 #include <apriltags_ros/AprilTagDetection.h>
+#include <apriltags_ros/AprilTagDetectionArray.h>
+#include <geometry_msgs/PoseArray.h>
+#include <cv_bridge/cv_bridge.h>
 
 namespace apriltags_ros{
 
@@ -40,12 +44,55 @@ struct DetectionPosesQueueWrapper {
   std::chrono::steady_clock::time_point lastUpdated_;
 };
 
+enum class AprilTagDetectorProfiles {
+  off = 0, localization = 1, docking_no_depth_validation = 5, docking_w_depth_validation = 6, unknown = 100
+};
+
+class AprilTagDetectorProfile {
+  public:
+  static AprilTagDetectorProfile GetInstance(AprilTagDetectorProfiles profile) {
+    AprilTagDetectorProfile result;
+    result.profile_ = profile;
+    switch (profile) {
+      case AprilTagDetectorProfiles::off:
+      result.number_of_frames_to_capture_ = 0;
+      result.depth_camera_validation_ = false;
+      return result;
+      case AprilTagDetectorProfiles::localization:
+      result.number_of_frames_to_capture_ = 1;
+      result.depth_camera_validation_ = true;
+      return result;
+      case AprilTagDetectorProfiles::docking_no_depth_validation:
+      result.number_of_frames_to_capture_ = 5;
+      result.depth_camera_validation_ = false;
+      return result;
+      case AprilTagDetectorProfiles::docking_w_depth_validation:
+      result.number_of_frames_to_capture_ = 5;
+      result.depth_camera_validation_ = true;
+      return result;
+      default:
+      return result;
+    }
+  };
+
+  AprilTagDetectorProfiles getProfile() const {return profile_;}
+  unsigned int getNumberOfFramesToCapture() const {return number_of_frames_to_capture_;}
+  bool getUseDepthCameraValidation() const {return depth_camera_validation_;} 
+
+  private:
+  AprilTagDetectorProfiles profile_ = AprilTagDetectorProfiles::unknown;
+  unsigned int number_of_frames_to_capture_ = 0;
+  bool depth_camera_validation_ = false;
+};
+
+
+
 class AprilTagDetector{
  public:
   AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh);
   ~AprilTagDetector();
  private:
-  void enableCb(const std_msgs::Int8& msg);
+  void enableCb(const AprilTagProfile& msg);
   void imageCb(const sensor_msgs::PointCloud2ConstPtr& depth_msg, const sensor_msgs::ImageConstPtr& rgb_msg_in,
 		const sensor_msgs::CameraInfoConstPtr& rgb_info_msg, const sensor_msgs::CameraInfoConstPtr& depth_cam_info);
   std::map<int, AprilTagDescription> parse_tag_descriptions(XmlRpc::XmlRpcValue& april_tag_descriptions);
@@ -54,6 +101,9 @@ class AprilTagDetector{
   tf::Transform getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
     const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info_msg,
     std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxis);
+
+  void processWithPlaneValidation(bool transform_output, const sensor_msgs::PointCloud2ConstPtr& cloud, const sensor_msgs::CameraInfoConstPtr& rgb_cam_info, const sensor_msgs::CameraInfoConstPtr& depth_cam_info, AprilTags::TagDetection& detection,  AprilTagDetectionArray &valid_pose_tag_detection_array, AprilTagDetectionArray & all_tag_detection_array, geometry_msgs::PoseArray & tag_pose_array, geometry_msgs::PoseArray & plane_pose_array, cv_bridge::CvImagePtr cv_ptr, tf::Transform output_transform, std_msgs::Header header);
+  void processWithoutPlaneValidation(bool transform_output, const sensor_msgs::PointCloud2ConstPtr& cloud, const sensor_msgs::CameraInfoConstPtr& rgb_cam_info, const sensor_msgs::CameraInfoConstPtr& depth_cam_info, AprilTags::TagDetection& detection,  AprilTagDetectionArray &valid_pose_tag_detection_array, AprilTagDetectionArray & all_tag_detection_array, geometry_msgs::PoseArray & tag_pose_array, geometry_msgs::PoseArray & plane_pose_array, cv_bridge::CvImagePtr cv_ptr, tf::Transform output_transform, std_msgs::Header header);
 
  private:
   std::map<int, AprilTagDescription> descriptions_;
@@ -102,6 +152,8 @@ class AprilTagDetector{
 
   tf::TransformListener tf_listener_;
   std::string output_frame_id_;
+
+  AprilTagDetectorProfile current_profile_;
 };
 
 }

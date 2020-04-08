@@ -34,6 +34,7 @@ add_message_files(
   FILES
   AprilTagDetection.msg
   AprilTagDetectionArray.msg
+  AprilTagProfile.msg
 )
 
 generate_messages(
