@@ -293,6 +293,10 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       bool validPose = true;
 
       // The maximum allowed angle delta for each axis
+      // using number_of_frames_to_capture_ == 1 comparison below is a quick hack to accelerate docking
+      // that check ensures that we only validate depth plane for localization
+      // that check means that we skip plane validation for docking (which requires more than 1 april tag detection)
+      // full version will not use this hack
       if (number_of_frames_to_capture_ == 1 && (diffRoll > plane_angle_threshold_) || (diffPitch > plane_angle_threshold_))
       {
         ROS_DEBUG_THROTTLE(5.0, "April tag and plane poses do not match!");
