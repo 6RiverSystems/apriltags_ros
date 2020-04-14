@@ -96,6 +96,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   pnh.param<int>("decimate_rate", decimate_rate_, 3);
 
   pnh.param<bool>("publish_plane_cloud", publish_plane_cloud_, false);
+  pnh.param<bool>("depth_plane_validation_for_docking", depth_plane_validation_for_docking_, false);
 
   pnh.param<float>("plane_model_distance_threshold", plane_model_distance_threshold_, 0.01f);
 
@@ -293,7 +294,12 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
       bool validPose = true;
 
       // The maximum allowed angle delta for each axis
-      if ((diffRoll > plane_angle_threshold_) || (diffPitch > plane_angle_threshold_))
+      // using number_of_frames_to_capture_ == 1 comparison below is a quick hack to accelerate docking
+      // that check ensures that we only validate depth plane for localization
+      // that check means that we skip plane validation for docking (which requires more than 1 april tag detection)
+      // full version will not use this hack
+      bool run_plane_validation = depth_plane_validation_for_docking_ || number_of_frames_to_capture_ == 1;
+      if (run_plane_validation && ((diffRoll > plane_angle_threshold_) || (diffPitch > plane_angle_threshold_)))
       {
         ROS_DEBUG_THROTTLE(5.0, "April tag and plane poses do not match!");
         ROS_DEBUG_THROTTLE(5.0, "April angle: %f, %f", aprilTagRoll, aprilTagPitch);
