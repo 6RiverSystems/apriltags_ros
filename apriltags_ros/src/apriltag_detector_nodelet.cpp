@@ -1,7 +1,7 @@
 #include <apriltags_ros/apriltag_detector.h>
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
-#include <pluginlib/class_list_macros.h>
+#include <pluginlib/class_list_macros.hpp>
 
 
 
@@ -23,4 +23,4 @@ private:
 
 }
 
-PLUGINLIB_DECLARE_CLASS(apriltags_ros, AprilTagDetectorNodelet, apriltags_ros::AprilTagDetectorNodelet, nodelet::Nodelet);
+PLUGINLIB_EXPORT_CLASS(apriltags_ros::AprilTagDetectorNodelet, nodelet::Nodelet);
