@@ -92,6 +92,7 @@ class AprilTagDetector{
   float plane_inlier_threshold_;
   float plane_angle_threshold_;
   bool publish_plane_cloud_;
+  bool depth_plane_validation_for_docking_;
 
   std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > tracked_april_tags_with_valid_pose_;
   std::map<int,std::shared_ptr<DetectionPosesQueueWrapper> > all_tracked_april_tags_;
