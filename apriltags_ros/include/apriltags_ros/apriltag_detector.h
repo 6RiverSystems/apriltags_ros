@@ -17,6 +17,7 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <chrono>
 #include <apriltags_ros/AprilTagDetection.h>
+#include <apriltags_ros/apriltag_detector_cuda.cuh>
 
 namespace apriltags_ros{
 
@@ -60,6 +61,7 @@ class AprilTagDetector{
   std::string sensor_frame_id_;
 
   boost::shared_ptr<image_transport::ImageTransport> rgb_it_;
+  boost::shared_ptr<AprilTagDetectorCuda> detector_impl_;
 
   // Subscriptions
   ros::NodeHandlePtr rgb_nh_;

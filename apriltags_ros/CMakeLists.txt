@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(apriltags_ros)
+project(apriltags_ros LANGUAGES CUDA CXX)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -25,9 +25,13 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 set(CMAKE_CXX_STANDARD 11)
+if(NOT DEFINED CMAKE_CUDA_STANDARD)
+    set(CMAKE_CUDA_STANDARD 11)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+endif()
 
 find_package(PCL 1.8 REQUIRED QUIET COMPONENTS io common segmentation)
-
+find_package(CUDA)
 find_package(Eigen3)
 
 add_message_files(
@@ -60,6 +64,12 @@ include_directories(
   ${EIGEN3_INCLUDE_DIR}
 )
 
+add_library(gpu_apriltag_detector
+  src/apriltag_detector_cuda.cu
+)
+target_link_libraries(gpu_apriltag_detector ${CMAKE_SOURCE_DIR}/src/libapril_tagging.a
+)
+
 add_library(apriltag_detector
   src/apriltag_detector.cpp
 )
@@ -67,10 +77,13 @@ target_link_libraries(apriltag_detector
   ${PCL_LIBRARIES}
   ${catkin_LIBRARIES}
   ${srslib_framework_LIBRARIES}
+  gpu_apriltag_detector
 )
+
 add_dependencies(apriltag_detector
   ${catkin_EXPORTED_TARGETS}
   apriltags_ros_generate_messages_cpp
+  gpu_apriltag_detector
 )
 
 add_library(apriltag_detector_nodelet src/apriltag_detector_nodelet.cpp)

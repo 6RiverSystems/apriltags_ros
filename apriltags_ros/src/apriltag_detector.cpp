@@ -43,7 +43,7 @@ AprilTagDetector::AprilTagDetector(ros::NodeHandle& nh, ros::NodeHandle& pnh) :
   publish_plane_cloud_(false),
   tf_pose_acceptance_error_range_(0.0698132f),
   max_number_of_detection_instances_per_tag_(5),
-  valid_detection_time_out_(15)
+  valid_detection_time_out_(15), detector_impl_(new AprilTagDetectorCuda())
 {
   XmlRpc::XmlRpcValue april_tag_descriptions;
   if(!pnh.getParam("tag_descriptions", april_tag_descriptions)){
@@ -167,11 +167,14 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
   const sensor_msgs::ImageConstPtr& rgb_msg_in,
   const sensor_msgs::CameraInfoConstPtr& rgb_cam_info, const sensor_msgs::CameraInfoConstPtr& depth_cam_info) {
 
+
   // Check for trigger / timing
   if (!number_of_frames_to_capture_) {
     ROS_DEBUG_THROTTLE(5.0, "April images received but not enabled.");
     return;
   }
+
+  
 
   ROS_DEBUG_THROTTLE(5.0, "April images received.");
 
@@ -184,16 +187,10 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
         cloud->header.frame_id.c_str(), rgb_msg_in->header.frame_id.c_str());
     }
 
-    cv_bridge::CvImagePtr cv_ptr;
-    try{
-      cv_ptr = cv_bridge::toCvCopy(rgb_msg_in, sensor_msgs::image_encodings::BGR8);
-    }
-    catch (cv_bridge::Exception& e){
-      ROS_ERROR("cv_bridge exception: %s", e.what());
-      return;
-    }
-    cv::Mat gray;
-    cv::cvtColor(cv_ptr->image, gray, CV_BGR2GRAY);
+    
+    std::vector<AprilTags::TagDetection> result = detector_impl_->imageCb(cloud, rgb_msg_in, rgb_cam_info, depth_cam_info);
+    ROS_DEBUG("%d tag detected", (int)result.size());
+/*
     std::vector<AprilTags::TagDetection> detections = tag_detector_->extractTags(gray);
     ROS_DEBUG("%d tag detected", (int)detections.size());
 
@@ -429,8 +426,9 @@ void AprilTagDetector::imageCb(const sensor_msgs::PointCloud2ConstPtr& cloud,
 
     valid_detections_pub_.publish(valid_pose_tag_detection_array);
     all_detections_pub_.publish(all_tag_detection_array);
-
+  */
   }
+
 
 
 }
