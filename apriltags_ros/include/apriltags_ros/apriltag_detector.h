@@ -46,29 +46,29 @@ class AprilTagDetector{
   ~AprilTagDetector();
  private:
   void enableCb(const std_msgs::Int8& msg);
-  void imageCb(const sensor_msgs::PointCloud2ConstPtr& depth_msg, const sensor_msgs::ImageConstPtr& rgb_msg_in,
-		const sensor_msgs::CameraInfoConstPtr& rgb_info_msg, const sensor_msgs::CameraInfoConstPtr& depth_cam_info);
+  void imageCb(const sensor_msgs::PointCloud2ConstPtr& depth_msg, const sensor_msgs::ImageConstPtr& infra_msg_in,
+		const sensor_msgs::CameraInfoConstPtr& infra_info_msg, const sensor_msgs::CameraInfoConstPtr& depth_cam_info);
   std::map<int, AprilTagDescription> parse_tag_descriptions(XmlRpc::XmlRpcValue& april_tag_descriptions);
   bool getTransform(const std::string & target_frame, const std::string & source_frame, tf::Transform& output);
 
   tf::Transform getDepthImagePlaneTransform(const sensor_msgs::PointCloud2ConstPtr& cloud,
-    const sensor_msgs::CameraInfoConstPtr& rgb_info, const sensor_msgs::CameraInfoConstPtr& depth_info_msg,
+    const sensor_msgs::CameraInfoConstPtr& infra_info, const sensor_msgs::CameraInfoConstPtr& depth_info_msg,
     std::pair<float,float> polygon[4], AprilTags::TagDetection& detection, tf::Vector3 xAxis);
 
  private:
   std::map<int, AprilTagDescription> descriptions_;
   std::string sensor_frame_id_;
 
-  boost::shared_ptr<image_transport::ImageTransport> rgb_it_;
+  boost::shared_ptr<image_transport::ImageTransport> infra_it_;
 
   // Subscriptions
-  ros::NodeHandlePtr rgb_nh_;
+  ros::NodeHandlePtr infra_nh_;
   image_transport::ImageTransport it_;
   message_filters::Subscriber<sensor_msgs::PointCloud2> sub_point_cloud_;
-  message_filters::Subscriber<sensor_msgs::CameraInfo> sub_rgb_info_;
+  message_filters::Subscriber<sensor_msgs::CameraInfo> sub_infra_info_;
   message_filters::Subscriber<sensor_msgs::CameraInfo> sub_depth_info_;
 
-  image_transport::SubscriberFilter sub_rgb_;
+  image_transport::SubscriberFilter sub_infra_;
 
   typedef ExactTime<sensor_msgs::PointCloud2, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Synchronizer;
